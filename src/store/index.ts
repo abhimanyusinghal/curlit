@@ -15,6 +15,7 @@ const STORAGE_KEYS = {
   history: 'curlit_history',
   environments: 'curlit_environments',
   activeEnv: 'curlit_active_env',
+  theme: 'curlit_theme',
 };
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -35,6 +36,7 @@ function saveToStorage(key: string, data: unknown) {
 }
 
 export type SidebarView = 'collections' | 'history' | 'environments';
+export type Theme = 'dark' | 'light';
 
 interface AppState {
   // Tabs
@@ -57,6 +59,7 @@ interface AppState {
   activeEnvironmentId: string | null;
 
   // UI
+  theme: Theme;
   sidebarView: SidebarView;
   sidebarOpen: boolean;
 
@@ -95,6 +98,8 @@ interface AppState {
   markTabSaved: (tabId: string, collectionId: string, sourceRequestId: string) => void;
 
   // Actions - UI
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
   setSidebarView: (view: SidebarView) => void;
   toggleSidebar: () => void;
 }
@@ -120,6 +125,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   history: loadFromStorage<HistoryEntry[]>(STORAGE_KEYS.history, []),
   environments: loadFromStorage<Environment[]>(STORAGE_KEYS.environments, []),
   activeEnvironmentId: loadFromStorage<string | null>(STORAGE_KEYS.activeEnv, null),
+  theme: loadFromStorage<Theme>(STORAGE_KEYS.theme, 'dark'),
   sidebarView: 'collections',
   sidebarOpen: true,
 
@@ -440,6 +446,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   // UI actions
+  setTheme: (theme) => {
+    document.documentElement.setAttribute('data-theme', theme);
+    saveToStorage(STORAGE_KEYS.theme, theme);
+    set({ theme });
+  },
+  toggleTheme: () => {
+    const newTheme = get().theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    saveToStorage(STORAGE_KEYS.theme, newTheme);
+    set({ theme: newTheme });
+  },
   setSidebarView: (view) => set({ sidebarView: view }),
   toggleSidebar: () => set(state => ({ sidebarOpen: !state.sidebarOpen })),
 }));

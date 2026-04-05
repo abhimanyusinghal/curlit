@@ -33,6 +33,20 @@
   color-scheme: dark;
 }
 
+[data-theme="light"] {
+  color-scheme: light;
+  --color-dark-900: #ffffff;
+  --color-dark-800: #f5f7fa;
+  --color-dark-700: #e8ecf2;
+  --color-dark-600: #d1d8e4;
+  --color-dark-500: #b0bac9;
+  --color-dark-400: #7a879c;
+  --color-dark-300: #4f5d73;
+  --color-dark-200: #2e3a4e;
+  --color-dark-100: #1a2332;
+  --color-dark-50: #0d1117;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-dark-500) transparent;
