@@ -492,6 +492,132 @@ describe('parsePostmanCollection: folders', () => {
   });
 });
 
+// ─── Templated URL preservation ─────────────────────────────────────────────
+
+describe('parsePostmanCollection: templated URLs', () => {
+  it('preserves {{variable}} placeholders in string URLs', () => {
+    const col = postmanCollection({
+      item: [{
+        name: 'Test',
+        request: { method: 'GET', url: 'https://{{host}}/api/{{userId}}/profile' },
+      }],
+    });
+    const { requests } = parsePostmanCollection(col as any);
+    expect(requests[0].url).toBe('https://{{host}}/api/{{userId}}/profile');
+  });
+
+  it('preserves {{variable}} placeholders in URL object raw field', () => {
+    const col = postmanCollection({
+      item: [{
+        name: 'Test',
+        request: {
+          method: 'GET',
+          url: {
+            raw: '{{baseUrl}}/users/{{userId}}?page=1',
+            query: [{ key: 'page', value: '1' }],
+          },
+        },
+      }],
+    });
+    const { requests } = parsePostmanCollection(col as any);
+    expect(requests[0].url).toBe('{{baseUrl}}/users/{{userId}}');
+  });
+});
+
+// ─── Inherited auth ─────────────────────────────────────────────────────────
+
+describe('parsePostmanCollection: inherited auth', () => {
+  it('inherits collection-level auth when request has no auth', () => {
+    const col = postmanCollection({
+      auth: {
+        type: 'bearer',
+        bearer: [{ key: 'token', value: 'collection-token', type: 'string' }],
+      },
+      item: [{
+        name: 'Test',
+        request: { method: 'GET', url: 'https://example.com' },
+      }],
+    });
+    const { requests } = parsePostmanCollection(col as any);
+    expect(requests[0].auth.type).toBe('bearer');
+    expect(requests[0].auth.bearer!.token).toBe('collection-token');
+  });
+
+  it('inherits folder-level auth when request has no auth', () => {
+    const col = postmanCollection({
+      item: [{
+        name: 'Folder',
+        auth: {
+          type: 'basic',
+          basic: [
+            { key: 'username', value: 'folderUser', type: 'string' },
+            { key: 'password', value: 'folderPass', type: 'string' },
+          ],
+        },
+        item: [{
+          name: 'Test',
+          request: { method: 'GET', url: 'https://example.com' },
+        }],
+      }],
+    });
+    const { requests } = parsePostmanCollection(col as any);
+    expect(requests[0].auth.type).toBe('basic');
+    expect(requests[0].auth.basic!.username).toBe('folderUser');
+  });
+
+  it('request-level auth overrides inherited auth', () => {
+    const col = postmanCollection({
+      auth: {
+        type: 'bearer',
+        bearer: [{ key: 'token', value: 'collection-token', type: 'string' }],
+      },
+      item: [{
+        name: 'Test',
+        request: {
+          method: 'GET',
+          url: 'https://example.com',
+          auth: {
+            type: 'basic',
+            basic: [
+              { key: 'username', value: 'reqUser', type: 'string' },
+              { key: 'password', value: 'reqPass', type: 'string' },
+            ],
+          },
+        },
+      }],
+    });
+    const { requests } = parsePostmanCollection(col as any);
+    expect(requests[0].auth.type).toBe('basic');
+    expect(requests[0].auth.basic!.username).toBe('reqUser');
+  });
+
+  it('folder auth overrides collection auth for nested requests', () => {
+    const col = postmanCollection({
+      auth: {
+        type: 'bearer',
+        bearer: [{ key: 'token', value: 'collection-token', type: 'string' }],
+      },
+      item: [{
+        name: 'Folder',
+        auth: {
+          type: 'basic',
+          basic: [
+            { key: 'username', value: 'folderUser', type: 'string' },
+            { key: 'password', value: 'folderPass', type: 'string' },
+          ],
+        },
+        item: [{
+          name: 'Test',
+          request: { method: 'GET', url: 'https://example.com' },
+        }],
+      }],
+    });
+    const { requests } = parsePostmanCollection(col as any);
+    expect(requests[0].auth.type).toBe('basic');
+    expect(requests[0].auth.basic!.username).toBe('folderUser');
+  });
+});
+
 // ─── Full realistic Postman collection ───────────────────────────────────────
 
 describe('parsePostmanCollection: full collection', () => {

@@ -10,12 +10,14 @@ interface PostmanCollection {
   };
   item: PostmanItem[];
   variable?: PostmanVariable[];
+  auth?: PostmanAuth;
 }
 
 interface PostmanItem {
   name: string;
   request?: PostmanRequest;
   item?: PostmanItem[]; // folders contain nested items
+  auth?: PostmanAuth;
 }
 
 interface PostmanRequest {
@@ -108,11 +110,11 @@ export function parsePostmanCollection(data: PostmanCollection): {
   requests: RequestConfig[];
 } {
   const name = data.info.name || 'Imported Collection';
-  const requests = flattenItems(data.item);
+  const requests = flattenItems(data.item, '', data.auth);
   return { name, requests };
 }
 
-function flattenItems(items: PostmanItem[], prefix = ''): RequestConfig[] {
+function flattenItems(items: PostmanItem[], prefix = '', inheritedAuth?: PostmanAuth): RequestConfig[] {
   const results: RequestConfig[] = [];
 
   for (const item of items) {
@@ -120,21 +122,24 @@ function flattenItems(items: PostmanItem[], prefix = ''): RequestConfig[] {
 
     if (item.item && item.item.length > 0) {
       // Folder — recurse, preserving folder path as name prefix
-      results.push(...flattenItems(item.item, itemName));
+      // Folder-level auth overrides inherited; otherwise pass inherited down
+      const folderAuth = item.auth || inheritedAuth;
+      results.push(...flattenItems(item.item, itemName, folderAuth));
     } else if (item.request) {
-      results.push(convertRequest(item.name, itemName, item.request));
+      results.push(convertRequest(item.name, itemName, item.request, inheritedAuth));
     }
   }
 
   return results;
 }
 
-function convertRequest(name: string, _fullPath: string, req: PostmanRequest): RequestConfig {
+function convertRequest(name: string, _fullPath: string, req: PostmanRequest, inheritedAuth?: PostmanAuth): RequestConfig {
   const url = extractUrl(req.url);
   const params = extractQueryParams(req.url);
   const headers = convertHeaders(req.header);
   const body = convertBody(req.body);
-  const auth = convertAuth(req.auth);
+  // Use request-level auth if present, otherwise fall back to inherited (folder/collection) auth
+  const auth = convertAuth(req.auth || inheritedAuth);
   const method = (req.method?.toUpperCase() || 'GET') as HttpMethod;
 
   return createDefaultRequest({
@@ -154,21 +159,12 @@ function extractUrl(url: string | PostmanUrl | undefined): string {
   if (!url) return '';
   if (typeof url === 'string') {
     // Strip query params — they'll be extracted separately
-    try {
-      const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
-      return `${parsed.origin}${parsed.pathname}`;
-    } catch {
-      return url.split('?')[0];
-    }
+    // Avoid new URL() to preserve templated path variables like {{userId}}
+    return url.split('?')[0];
   }
   if (url.raw) {
     // Use raw but strip query string
-    try {
-      const parsed = new URL(url.raw.startsWith('http') ? url.raw : `https://${url.raw}`);
-      return `${parsed.origin}${parsed.pathname}`;
-    } catch {
-      return url.raw.split('?')[0];
-    }
+    return url.raw.split('?')[0];
   }
   // Build from parts
   const protocol = url.protocol || 'https';
