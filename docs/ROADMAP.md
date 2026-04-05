@@ -31,7 +31,7 @@
 ### v1.1 -- Developer Experience
 
 - [ ] Light theme / theme toggle
-- [ ] Postman collection import (JSON v2.1 format)
+- [x] Postman collection import (JSON v2.1 format)
 - [ ] OpenAPI / Swagger import -- auto-generate requests from a spec
 - [ ] Request name editing directly in the tab bar
 - [ ] Duplicate request (Ctrl+D)
