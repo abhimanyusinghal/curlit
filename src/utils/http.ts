@@ -1,6 +1,6 @@
 import type { RequestConfig, ResponseData, KeyValuePair, AuthConfig } from '../types';
 
-function buildUrl(baseUrl: string, params: KeyValuePair[]): string {
+export function buildUrl(baseUrl: string, params: KeyValuePair[]): string {
   const enabledParams = params.filter(p => p.enabled && p.key);
   if (enabledParams.length === 0) return baseUrl;
 
@@ -9,7 +9,7 @@ function buildUrl(baseUrl: string, params: KeyValuePair[]): string {
   return url.toString();
 }
 
-function buildHeaders(headers: KeyValuePair[], auth: AuthConfig): Record<string, string> {
+export function buildHeaders(headers: KeyValuePair[], auth: AuthConfig): Record<string, string> {
   const result: Record<string, string> = {};
 
   headers.filter(h => h.enabled && h.key).forEach(h => {
@@ -37,7 +37,7 @@ function buildHeaders(headers: KeyValuePair[], auth: AuthConfig): Record<string,
   return result;
 }
 
-function buildBody(request: RequestConfig): string | FormData | null {
+export function buildBody(request: RequestConfig): string | FormData | null {
   if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return null;
 
   switch (request.body.type) {

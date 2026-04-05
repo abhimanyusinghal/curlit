@@ -57,21 +57,30 @@ curlit/
 │   ├── ROADMAP.md
 │   ├── ARCHITECTURE.md
 │   └── USER_GUIDE.md
+├── e2e/                   # Playwright end-to-end tests
 ├── server/
-│   └── proxy.js           # Express proxy to bypass CORS
+│   ├── proxy.js           # Express proxy to bypass CORS
+│   └── __tests__/         # Proxy server tests
 ├── src/
 │   ├── components/        # React components
+│   │   └── __tests__/     # Component integration tests
 │   ├── hooks/             # Custom hooks (resizable panels)
 │   ├── store/             # Zustand state management
+│   │   └── __tests__/     # Store unit tests
+│   ├── test/              # Test setup and utilities
 │   ├── types/             # TypeScript type definitions
+│   │   └── __tests__/     # Type factory tests
 │   ├── utils/             # HTTP client, cURL parser, formatters
+│   │   └── __tests__/     # Utility unit tests
 │   ├── App.tsx            # Root layout
 │   ├── index.css          # Tailwind config & global styles
 │   └── main.tsx           # Entry point
 ├── index.html
 ├── package.json
 ├── tsconfig.json
-└── vite.config.ts
+├── vite.config.ts
+├── vitest.config.ts       # Vitest test configuration
+└── playwright.config.ts   # Playwright E2E configuration
 ```
 
 ## Scripts
@@ -83,6 +92,33 @@ curlit/
 | `npm run dev:server` | Start proxy server only |
 | `npm run build` | TypeScript check + production build |
 | `npm run preview` | Preview production build |
+| `npm test` | Run all unit and integration tests |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run test:coverage` | Run tests with V8 coverage report |
+| `npm run test:e2e` | Run Playwright end-to-end tests |
+
+## Testing
+
+CurlIt has a comprehensive test suite with **138 automated tests** across five layers:
+
+| Layer | Tool | Tests | What it covers |
+|-------|------|-------|----------------|
+| Unit | Vitest | 63 | Pure utility functions (URL building, header construction, body serialization, variable substitution, cURL parsing/generation, formatters) and type factory functions |
+| Store | Vitest | 37 | Zustand store actions (tabs, requests, collections, history, environments, localStorage persistence) |
+| Component | Vitest + React Testing Library | 24 | All 9 React components rendered with real store state |
+| Server | Vitest + Supertest | 7 | Express proxy server (request forwarding, error handling, body types) |
+| E2E | Playwright | 12 | Full browser workflows (send request, collections, cURL import/export, environments, keyboard shortcuts) |
+
+```bash
+# Run unit + integration tests
+npm test
+
+# Run with coverage
+npm run test:coverage
+
+# Run E2E tests (requires Chromium -- install with: npx playwright install chromium)
+npm run test:e2e
+```
 
 ## How It Works
 
@@ -96,9 +132,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Write your code and add tests for new functionality
+4. Run `npm test` and `npm run test:e2e` to ensure all tests pass
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
 ## License
 

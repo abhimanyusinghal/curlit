@@ -22,6 +22,7 @@
 - [x] Resizable sidebar and request/response panels (drag to resize)
 - [x] Express.js proxy server to bypass CORS
 - [x] All data persisted locally via localStorage
+- [x] Automated test suite tests across unit, store, component, server, and E2E layers (Vitest + React Testing Library + Supertest + Playwright)
 
 ---
 

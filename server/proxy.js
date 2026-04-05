@@ -97,6 +97,13 @@ app.post('/api/proxy', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`CurlIt proxy server running on http://localhost:${PORT}`);
-});
+// Export app for testing
+export { app };
+
+// Only start server when not in test environment
+const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST;
+if (!isTest) {
+  app.listen(PORT, () => {
+    console.log(`CurlIt proxy server running on http://localhost:${PORT}`);
+  });
+}

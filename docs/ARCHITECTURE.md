@@ -133,3 +133,56 @@ All data is persisted in the browser's localStorage:
 ### Custom Hooks
 
 - `useResizable()` - Mouse-drag resizable panel behavior with localStorage persistence
+
+## Test Architecture
+
+CurlIt uses a layered testing strategy to catch regressions at the earliest and cheapest level.
+
+### Test Stack
+
+| Tool | Role |
+|------|------|
+| Vitest | Test runner for unit, store, component, and server tests |
+| React Testing Library | Component rendering and user interaction simulation |
+| Supertest | HTTP assertions for Express proxy server |
+| Playwright | Browser-based end-to-end tests |
+| jsdom | DOM environment for Vitest component tests |
+
+### Test Layers
+
+```
+ E2E (Playwright)         -- Full browser workflows
+ Component (RTL)          -- React components with real store, mocked network
+ Store (Vitest)           -- Zustand actions with localStorage
+ Unit (Vitest)            -- Pure functions, zero dependencies
+ Server (Supertest)       -- Express proxy in isolation
+```
+
+### Test File Structure
+
+Tests are co-located with source in `__tests__/` directories:
+
+```
+src/utils/__tests__/http.test.ts         # Utility function unit tests
+src/types/__tests__/index.test.ts        # Type factory tests
+src/store/__tests__/index.test.ts        # Store action tests
+src/components/__tests__/*.test.tsx      # Component integration tests
+src/test/setup.ts                        # Global test setup (cleanup, polyfills)
+src/test/test-utils.tsx                  # Custom render helpers
+server/__tests__/proxy.test.js           # Proxy server tests
+e2e/*.spec.ts                            # Playwright E2E tests
+```
+
+### Configuration
+
+- `vitest.config.ts` -- Vitest configuration (jsdom environment, setup files, coverage)
+- `playwright.config.ts` -- Playwright configuration (Chromium, auto-starts dev + proxy servers)
+
+### Running Tests
+
+```bash
+npm test              # All Vitest tests (unit + store + component + server)
+npm run test:watch    # Watch mode for development
+npm run test:coverage # With V8 coverage report
+npm run test:e2e      # Playwright E2E tests in Chromium
+```
