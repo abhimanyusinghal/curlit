@@ -1,73 +1,105 @@
-# React + TypeScript + Vite
+# CurlIt
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A fast, modern, open-source API testing tool built as an alternative to Postman. Test REST APIs, manage collections, configure environments, and import/export cURL commands -- all from your browser.
 
-Currently, two official plugins are available:
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)
+![React](https://img.shields.io/badge/React-19-61dafb)
+![Vite](https://img.shields.io/badge/Vite-5-646cff)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- **Full HTTP Client** -- GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS with color-coded method badges
+- **Request Builder** -- Query params, headers, body (JSON/Text/XML/Form Data/URL Encoded), and auth (Basic, Bearer, API Key)
+- **Response Viewer** -- Syntax-highlighted body (JSON, XML, HTML), headers table, cookies table, status/time/size metrics
+- **Collections** -- Organize, save, and reuse requests; import/export as JSON
+- **Environment Variables** -- Define `{{variable}}` placeholders substituted at send time across URL, headers, params, body, and auth
+- **Request History** -- Automatically records the last 100 requests, searchable and grouped by date
+- **Multi-Tab Interface** -- Work on multiple requests simultaneously with independent state per tab
+- **cURL Import/Export** -- Paste a cURL command to create a request, or export any request as cURL
+- **Keyboard Shortcuts** -- `Ctrl+N` new tab, `Ctrl+I` import cURL, `Ctrl+E` export cURL, `Ctrl+B` toggle sidebar
+- **Resizable Panels** -- Drag to resize the sidebar and request/response split
+- **Dark Theme** -- Purpose-built dark UI designed for long sessions
+- **Local Persistence** -- Collections, environments, and history are saved to localStorage
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Quick Start
 
-## Expanding the ESLint configuration
+```bash
+# Clone the repository
+git clone https://github.com/abhimanyusinghal/curlit.git
+cd curlit
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# Install dependencies
+npm install
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Start the dev server (frontend + proxy)
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Tech Stack
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, TypeScript, Tailwind CSS 4 |
+| State | Zustand |
+| Editor | CodeMirror 6 |
+| Icons | Lucide React |
+| Build | Vite 5 |
+| Proxy | Express.js |
+
+## Project Structure
+
 ```
+curlit/
+├── docs/                  # Documentation
+│   ├── IMPLEMENTATION_PLAN.md
+│   ├── ARCHITECTURE.md
+│   └── USER_GUIDE.md
+├── server/
+│   └── proxy.js           # Express proxy to bypass CORS
+├── src/
+│   ├── components/        # React components
+│   ├── hooks/             # Custom hooks (resizable panels)
+│   ├── store/             # Zustand state management
+│   ├── types/             # TypeScript type definitions
+│   ├── utils/             # HTTP client, cURL parser, formatters
+│   ├── App.tsx            # Root layout
+│   ├── index.css          # Tailwind config & global styles
+│   └── main.tsx           # Entry point
+├── index.html
+├── package.json
+├── tsconfig.json
+└── vite.config.ts
+```
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start frontend + proxy server |
+| `npm run dev:frontend` | Start Vite dev server only |
+| `npm run dev:server` | Start proxy server only |
+| `npm run build` | TypeScript check + production build |
+| `npm run preview` | Preview production build |
+
+## How It Works
+
+CurlIt runs a lightweight Express proxy server alongside the Vite dev server. When you send a request, the frontend POSTs the request configuration to `/api/proxy`, which forwards it to the target API using Node.js `fetch`. This avoids browser CORS restrictions and returns the full response (status, headers, body, cookies) back to the UI.
+
+All data (collections, environments, history, panel sizes) is persisted in `localStorage` -- no database or account required.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License -- see the [LICENSE](LICENSE) file for details.
