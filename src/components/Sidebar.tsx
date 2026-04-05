@@ -15,6 +15,7 @@ import { useAppStore, type SidebarView } from '../store';
 import { MethodBadge } from './MethodBadge';
 import { KeyValueEditor } from './KeyValueEditor';
 import type { Collection } from '../types';
+import { isPostmanCollection, parsePostmanCollection } from '../utils/postman';
 
 export function Sidebar() {
   const sidebarView = useAppStore(s => s.sidebarView);
@@ -66,16 +67,29 @@ function CollectionsPanel() {
   const handleImport = () => {
     try {
       const data = JSON.parse(importText);
-      if (data.collections && Array.isArray(data.collections)) {
+
+      if (isPostmanCollection(data)) {
+        // Postman v2.1 format
+        const { name, requests } = parsePostmanCollection(data);
+        useAppStore.getState().createCollection(name);
+        const newCollection = useAppStore.getState().collections[useAppStore.getState().collections.length - 1];
+        requests.forEach(r => {
+          useAppStore.getState().saveRequestToCollection(newCollection.id, r);
+        });
+      } else if (data.collections && Array.isArray(data.collections)) {
+        // CurlIt native format
         data.collections.forEach((c: Collection) => {
-          const store = useAppStore.getState();
-          store.createCollection(c.name);
-          const newCollection = store.collections[store.collections.length - 1];
+          useAppStore.getState().createCollection(c.name);
+          const newCollection = useAppStore.getState().collections[useAppStore.getState().collections.length - 1];
           c.requests.forEach(r => {
-            store.saveRequestToCollection(newCollection.id, r);
+            useAppStore.getState().saveRequestToCollection(newCollection.id, r);
           });
         });
+      } else {
+        alert('Unrecognized format. Supported: CurlIt JSON or Postman Collection v2.1');
+        return;
       }
+
       setImportText('');
       setShowImport(false);
     } catch {
@@ -113,7 +127,7 @@ function CollectionsPanel() {
           <textarea
             value={importText}
             onChange={e => setImportText(e.target.value)}
-            placeholder='Paste collection JSON...'
+            placeholder='Paste CurlIt or Postman collection JSON...'
             className="bg-dark-700 border border-dark-600 rounded text-xs p-2 h-24 text-dark-200 resize-none"
           />
           <div className="flex gap-1">

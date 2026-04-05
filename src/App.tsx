@@ -18,6 +18,7 @@ import { ResponsePanel } from './components/ResponsePanel';
 import { Sidebar } from './components/Sidebar';
 import { CurlImportModal } from './components/CurlImportModal';
 import { CurlExportModal } from './components/CurlExportModal';
+import { SaveRequestModal } from './components/SaveRequestModal';
 import { useResizable } from './hooks/useResizable';
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
 
   const [showCurlImport, setShowCurlImport] = useState(false);
   const [showCurlExport, setShowCurlExport] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
   const activeRequest = activeTab ? requests[activeTab.requestId] : null;
@@ -75,6 +77,15 @@ function App() {
         case 'n':
           e.preventDefault();
           useAppStore.getState().addTab();
+          break;
+        case 's':
+          e.preventDefault();
+          {
+            const result = useAppStore.getState().saveActiveRequest();
+            if (result === 'needs-collection') {
+              setShowSaveModal(true);
+            }
+          }
           break;
       }
     }
@@ -196,13 +207,14 @@ function App() {
         </div>
         <div className="flex items-center gap-1">
           <Keyboard size={10} />
-          <span>Ctrl+N New | Ctrl+I Import | Ctrl+E Export | Ctrl+B Sidebar</span>
+          <span>Ctrl+S Save | Ctrl+N New | Ctrl+I Import | Ctrl+E Export | Ctrl+B Sidebar</span>
         </div>
       </footer>
 
       {/* Modals */}
       <CurlImportModal open={showCurlImport} onClose={() => setShowCurlImport(false)} />
       <CurlExportModal open={showCurlExport} onClose={() => setShowCurlExport(false)} request={activeRequest} />
+      <SaveRequestModal open={showSaveModal} onClose={() => setShowSaveModal(false)} />
     </div>
   );
 }

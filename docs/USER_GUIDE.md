@@ -78,9 +78,15 @@ The response will appear in the bottom panel with status code, timing, and size.
 
 - Click **+** or press **Ctrl+N** to open a new tab
 - Click a tab to switch to it
+- **Double-click** a tab name to rename it (press **Enter** to confirm, **Escape** to cancel)
 - Click the **X** on a tab to close it (at least one tab always remains)
 - The orange dot on a tab indicates unsaved modifications
 - Each tab maintains its own independent request and response state
+
+### Saving Requests (Ctrl+S)
+
+- **Collection request** (opened from sidebar): Press **Ctrl+S** to save changes back to the collection in-place. The orange dot clears after saving.
+- **New/unsaved request**: Press **Ctrl+S** to open a dialog where you can pick an existing collection or create a new one. After the first save, subsequent **Ctrl+S** presses save directly without a dialog.
 
 ---
 
@@ -113,8 +119,10 @@ Click any request in a collection to open it in a new tab.
 ### Importing a Collection
 
 1. Click the **Import** icon at the top of the Collections panel
-2. Paste the collection JSON
+2. Paste the collection JSON (supports both CurlIt native format and **Postman v2.1** format)
 3. Click **Import**
+
+The import auto-detects the format. To import from Postman, export your Postman collection as **Collection v2.1** JSON, then paste it directly into the import textarea.
 
 ---
 
@@ -212,11 +220,13 @@ The status bar shows:
 
 | Shortcut | Action |
 |----------|--------|
+| `Ctrl+S` | Save request to collection |
 | `Ctrl+N` | New tab |
 | `Ctrl+I` | Import cURL |
 | `Ctrl+E` | Export as cURL |
 | `Ctrl+B` | Toggle sidebar |
 | `Enter` (in URL bar) | Send request |
+| `Double-click` tab name | Rename request |
 
 ---
 

@@ -33,4 +33,33 @@ describe('RequestTabs', () => {
     fireEvent.click(screen.getByTitle('New Tab'));
     expect(useAppStore.getState().tabs).toHaveLength(2);
   });
+
+  it('double-click on tab name shows edit input', () => {
+    render(<RequestTabs />);
+    const tabName = screen.getByText('Untitled Request');
+    fireEvent.doubleClick(tabName);
+    const input = screen.getByDisplayValue('Untitled Request');
+    expect(input).toBeInTheDocument();
+    expect(input.tagName).toBe('INPUT');
+  });
+
+  it('editing tab name and pressing Enter renames the request', () => {
+    render(<RequestTabs />);
+    fireEvent.doubleClick(screen.getByText('Untitled Request'));
+    const input = screen.getByDisplayValue('Untitled Request');
+    fireEvent.change(input, { target: { value: 'My API Call' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    const tabId = useAppStore.getState().tabs[0].requestId;
+    expect(useAppStore.getState().requests[tabId].name).toBe('My API Call');
+    expect(screen.getByText('My API Call')).toBeInTheDocument();
+  });
+
+  it('pressing Escape cancels editing without renaming', () => {
+    render(<RequestTabs />);
+    fireEvent.doubleClick(screen.getByText('Untitled Request'));
+    const input = screen.getByDisplayValue('Untitled Request');
+    fireEvent.change(input, { target: { value: 'Changed' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.getByText('Untitled Request')).toBeInTheDocument();
+  });
 });

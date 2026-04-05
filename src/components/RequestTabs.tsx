@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
 import { useAppStore } from '../store';
 import { MethodBadge } from './MethodBadge';
@@ -8,6 +9,31 @@ export function RequestTabs() {
   const setActiveTab = useAppStore(s => s.setActiveTab);
   const closeTab = useAppStore(s => s.closeTab);
   const addTab = useAppStore(s => s.addTab);
+  const updateRequest = useAppStore(s => s.updateRequest);
+
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingTabId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingTabId]);
+
+  const startEditing = (tabId: string, currentName: string) => {
+    setEditingTabId(tabId);
+    setEditValue(currentName);
+  };
+
+  const commitEdit = (tab: typeof tabs[0]) => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== tab.name) {
+      updateRequest(tab.requestId, { name: trimmed });
+    }
+    setEditingTabId(null);
+  };
 
   return (
     <div className="flex items-center bg-dark-900 border-b border-dark-600 overflow-x-auto">
@@ -22,9 +48,32 @@ export function RequestTabs() {
           }`}
         >
           <MethodBadge method={tab.method} size="sm" />
-          <span className="truncate flex-1 text-xs">
-            {tab.name}
-          </span>
+          {editingTabId === tab.id ? (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={e => setEditValue(e.target.value)}
+              onBlur={() => commitEdit(tab)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') commitEdit(tab);
+                if (e.key === 'Escape') setEditingTabId(null);
+              }}
+              onClick={e => e.stopPropagation()}
+              className="flex-1 text-xs bg-dark-700 border border-accent-blue rounded px-1 py-0.5 text-dark-100 outline-none min-w-0"
+            />
+          ) : (
+            <span
+              className="truncate flex-1 text-xs"
+              onDoubleClick={e => {
+                e.stopPropagation();
+                startEditing(tab.id, tab.name);
+              }}
+              title="Double-click to rename"
+            >
+              {tab.name}
+            </span>
+          )}
           {tab.isModified && (
             <span className="w-1.5 h-1.5 rounded-full bg-accent-orange flex-shrink-0" />
           )}
