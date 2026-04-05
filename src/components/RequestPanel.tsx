@@ -6,6 +6,7 @@ import { html } from '@codemirror/lang-html';
 import { oneDark } from '@codemirror/theme-one-dark';
 import type { RequestConfig, BodyType, AuthType } from '../types';
 import { useAppStore } from '../store';
+import type { Theme } from '../store';
 import { KeyValueEditor } from './KeyValueEditor';
 
 type RequestTabType = 'params' | 'headers' | 'body' | 'auth';
@@ -84,6 +85,7 @@ export function RequestPanel({ request }: Props) {
 
 function BodyEditor({ request }: { request: RequestConfig }) {
   const updateRequest = useAppStore(s => s.updateRequest);
+  const theme = useAppStore(s => s.theme) as Theme;
 
   const bodyTypes: { id: BodyType; label: string }[] = [
     { id: 'none', label: 'None' },
@@ -141,7 +143,7 @@ function BodyEditor({ request }: { request: RequestConfig }) {
             value={request.body.raw}
             onChange={val => updateBody({ raw: val })}
             extensions={getExtension()}
-            theme={oneDark}
+            theme={theme === 'dark' ? oneDark : 'light'}
             height="250px"
             basicSetup={{
               lineNumbers: true,

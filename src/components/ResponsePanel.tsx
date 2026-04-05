@@ -7,6 +7,7 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { Copy, Check, FileDown } from 'lucide-react';
 import type { ResponseData } from '../types';
 import { getStatusColor, formatBytes, formatTime, tryFormatJson } from '../utils/http';
+import { useAppStore } from '../store';
 
 interface Props {
   response: ResponseData | null;
@@ -19,6 +20,7 @@ export function ResponsePanel({ response, loading }: Props) {
   const [activeTab, setActiveTab] = useState<ResponseTab>('body');
   const [copied, setCopied] = useState(false);
   const [bodyFormat, setBodyFormat] = useState<'pretty' | 'raw'>('pretty');
+  const theme = useAppStore(s => s.theme);
 
   if (loading) {
     return (
@@ -185,7 +187,7 @@ export function ResponsePanel({ response, loading }: Props) {
                 <CodeMirror
                   value={displayBody}
                   extensions={getExtensions()}
-                  theme={oneDark}
+                  theme={theme === 'dark' ? oneDark : 'light'}
                   readOnly
                   height="100%"
                   basicSetup={{

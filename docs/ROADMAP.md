@@ -30,7 +30,7 @@
 
 ### v1.1 -- Developer Experience
 
-- [ ] Light theme / theme toggle
+- [x] Light theme / theme toggle
 - [x] Postman collection import (JSON v2.1 format)
 - [ ] OpenAPI / Swagger import -- auto-generate requests from a spec
 - [x] Request name editing directly in the tab bar

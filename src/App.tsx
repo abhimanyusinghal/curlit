@@ -9,6 +9,8 @@ import {
   Zap,
   GripVertical,
   GripHorizontal,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useAppStore } from './store';
 import { RequestTabs } from './components/RequestTabs';
@@ -29,6 +31,8 @@ function App() {
   const loadingRequests = useAppStore(s => s.loadingRequests);
   const sidebarOpen = useAppStore(s => s.sidebarOpen);
   const toggleSidebar = useAppStore(s => s.toggleSidebar);
+  const theme = useAppStore(s => s.theme);
+  const toggleTheme = useAppStore(s => s.toggleTheme);
   const activeEnvironmentId = useAppStore(s => s.activeEnvironmentId);
   const environments = useAppStore(s => s.environments);
 
@@ -112,6 +116,13 @@ function App() {
             title={sidebarOpen ? 'Hide sidebar (Ctrl+B)' : 'Show sidebar (Ctrl+B)'}
           >
             {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="p-1.5 text-dark-400 hover:text-dark-200 rounded transition-colors cursor-pointer"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
         </div>
 
