@@ -163,28 +163,31 @@ describe('Collections', () => {
     expect(useAppStore.getState().collections[0].requests).toHaveLength(0);
   });
 
-  it('openRequestFromCollection creates new tab for request', () => {
+  it('openRequestFromCollection creates new tab with collection linkage', () => {
     useAppStore.getState().createCollection('Test');
     const colId = useAppStore.getState().collections[0].id;
     useAppStore.getState().saveRequestToCollection(colId, createDefaultRequest({ name: 'Saved', url: 'https://saved.com' }));
-    const reqId = useAppStore.getState().collections[0].requests[0].id;
+    const sourceReqId = useAppStore.getState().collections[0].requests[0].id;
     const tabsBefore = useAppStore.getState().tabs.length;
-    useAppStore.getState().openRequestFromCollection(colId, reqId);
-    expect(useAppStore.getState().tabs.length).toBe(tabsBefore + 1);
-    expect(useAppStore.getState().activeTabId).toBe(reqId);
+    useAppStore.getState().openRequestFromCollection(colId, sourceReqId);
+    const state = useAppStore.getState();
+    expect(state.tabs.length).toBe(tabsBefore + 1);
+    const newTab = state.tabs[state.tabs.length - 1];
+    expect(newTab.collectionId).toBe(colId);
+    expect(newTab.sourceRequestId).toBe(sourceReqId);
+    expect(newTab.name).toBe('Saved');
   });
 
   it('openRequestFromCollection activates existing tab if already open', () => {
     useAppStore.getState().createCollection('Test');
     const colId = useAppStore.getState().collections[0].id;
     useAppStore.getState().saveRequestToCollection(colId, createDefaultRequest({ name: 'Saved' }));
-    const reqId = useAppStore.getState().collections[0].requests[0].id;
-    useAppStore.getState().openRequestFromCollection(colId, reqId);
+    const sourceReqId = useAppStore.getState().collections[0].requests[0].id;
+    useAppStore.getState().openRequestFromCollection(colId, sourceReqId);
     const tabCount = useAppStore.getState().tabs.length;
     // Open same request again
-    useAppStore.getState().openRequestFromCollection(colId, reqId);
+    useAppStore.getState().openRequestFromCollection(colId, sourceReqId);
     expect(useAppStore.getState().tabs.length).toBe(tabCount); // no new tab
-    expect(useAppStore.getState().activeTabId).toBe(reqId);
   });
 });
 
@@ -284,6 +287,49 @@ describe('Environments', () => {
 
   it('getActiveVariables returns empty object when no active environment', () => {
     expect(useAppStore.getState().getActiveVariables()).toEqual({});
+  });
+});
+
+// ─── Save Active Request ─────────────────────────────────────────────────────
+
+describe('Save Active Request', () => {
+  it('returns needs-collection for unsaved request', () => {
+    const result = useAppStore.getState().saveActiveRequest();
+    expect(result).toBe('needs-collection');
+  });
+
+  it('saves back to collection in-place and clears isModified', () => {
+    useAppStore.getState().createCollection('API');
+    const colId = useAppStore.getState().collections[0].id;
+    useAppStore.getState().saveRequestToCollection(colId, createDefaultRequest({ name: 'Original', url: 'https://example.com' }));
+    const sourceReqId = useAppStore.getState().collections[0].requests[0].id;
+
+    useAppStore.getState().openRequestFromCollection(colId, sourceReqId);
+    const activeTabId = useAppStore.getState().activeTabId!;
+    const tab = useAppStore.getState().tabs.find(t => t.id === activeTabId)!;
+
+    useAppStore.getState().updateRequest(tab.requestId, { name: 'Renamed', url: 'https://updated.com' });
+    expect(useAppStore.getState().tabs.find(t => t.id === activeTabId)!.isModified).toBe(true);
+
+    const result = useAppStore.getState().saveActiveRequest();
+    expect(result).toBe('saved');
+
+    const savedReq = useAppStore.getState().collections[0].requests[0];
+    expect(savedReq.name).toBe('Renamed');
+    expect(savedReq.url).toBe('https://updated.com');
+    expect(useAppStore.getState().tabs.find(t => t.id === activeTabId)!.isModified).toBe(false);
+  });
+
+  it('markTabSaved sets collection linkage and clears isModified', () => {
+    const tabId = useAppStore.getState().tabs[0].id;
+    useAppStore.getState().updateRequest(useAppStore.getState().tabs[0].requestId, { name: 'test' });
+    expect(useAppStore.getState().tabs[0].isModified).toBe(true);
+
+    useAppStore.getState().markTabSaved(tabId, 'col-123', 'req-456');
+    const tab = useAppStore.getState().tabs[0];
+    expect(tab.collectionId).toBe('col-123');
+    expect(tab.sourceRequestId).toBe('req-456');
+    expect(tab.isModified).toBe(false);
   });
 });
 
