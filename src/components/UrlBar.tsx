@@ -31,11 +31,15 @@ export function UrlBar({ request }: Props) {
       setResponse(request.id, response);
       addToHistory(request, response);
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send request';
+      const isProxyDown = message === 'Failed to fetch' || message.includes('NetworkError');
       setResponse(request.id, {
         status: 0,
         statusText: 'Error',
         headers: {},
-        body: err instanceof Error ? err.message : 'Failed to send request',
+        body: isProxyDown
+          ? 'Could not reach the proxy server. Make sure it is running (npm run dev:server on port 3001).'
+          : message,
         size: 0,
         time: 0,
         cookies: [],

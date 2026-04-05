@@ -86,11 +86,24 @@ app.post('/api/proxy', async (req, res) => {
       time: elapsed,
     });
   } catch (error) {
+    // Extract the real error from error.cause (Node fetch wraps the actual error)
+    const cause = error.cause || error;
+    const code = cause.code || '';
+    const causeMessage = cause.message || error.message || 'Unknown error';
+
+    let errorDetail;
+    if (code) {
+      // Show Postman-style error: "Error: getaddrinfo ENOTFOUND hostname"
+      errorDetail = `Error: ${causeMessage}`;
+    } else {
+      errorDetail = `Error: ${error.message || 'Unknown error'}`;
+    }
+
     res.json({
       status: 0,
       statusText: 'Error',
       headers: {},
-      body: `Request failed: ${error.message}`,
+      body: errorDetail,
       cookies: [],
       time: 0,
     });
