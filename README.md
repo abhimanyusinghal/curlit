@@ -15,9 +15,10 @@ A fast, modern, open-source API testing tool built as an alternative to Postman.
 - **Collections** -- Organize, save, and reuse requests; import/export as JSON
 - **Environment Variables** -- Define `{{variable}}` placeholders substituted at send time across URL, headers, params, body, and auth
 - **Request History** -- Automatically records the last 100 requests, searchable and grouped by date
-- **Multi-Tab Interface** -- Work on multiple requests simultaneously with independent state per tab
+- **Multi-Tab Interface** -- Work on multiple requests simultaneously with independent state per tab; double-click tab to rename
 - **cURL Import/Export** -- Paste a cURL command to create a request, or export any request as cURL
-- **Keyboard Shortcuts** -- `Ctrl+N` new tab, `Ctrl+I` import cURL, `Ctrl+E` export cURL, `Ctrl+B` toggle sidebar
+- **Save Workflow** -- `Ctrl+S` saves changes back to the source collection in-place, or prompts to pick a collection for new requests
+- **Keyboard Shortcuts** -- `Ctrl+S` save, `Ctrl+N` new tab, `Ctrl+I` import cURL, `Ctrl+E` export cURL, `Ctrl+B` toggle sidebar
 - **Resizable Panels** -- Drag to resize the sidebar and request/response split
 - **Dark Theme** -- Purpose-built dark UI designed for long sessions
 - **Local Persistence** -- Collections, environments, and history are saved to localStorage
