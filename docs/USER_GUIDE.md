@@ -113,8 +113,10 @@ Click any request in a collection to open it in a new tab.
 ### Importing a Collection
 
 1. Click the **Import** icon at the top of the Collections panel
-2. Paste the collection JSON
+2. Paste the collection JSON (supports both CurlIt native format and **Postman v2.1** format)
 3. Click **Import**
+
+The import auto-detects the format. To import from Postman, export your Postman collection as **Collection v2.1** JSON, then paste it directly into the import textarea.
 
 ---
 
