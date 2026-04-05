@@ -12,7 +12,7 @@ A fast, modern, open-source API testing tool built as an alternative to Postman.
 - **Full HTTP Client** -- GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS with color-coded method badges
 - **Request Builder** -- Query params, headers, body (JSON/Text/XML/Form Data/URL Encoded), and auth (Basic, Bearer, API Key)
 - **Response Viewer** -- Syntax-highlighted body (JSON, XML, HTML), headers table, cookies table, status/time/size metrics
-- **Collections** -- Organize, save, and reuse requests; import/export as JSON
+- **Collections** -- Organize, save, and reuse requests; import/export as JSON; import Postman collections (v2.1)
 - **Environment Variables** -- Define `{{variable}}` placeholders substituted at send time across URL, headers, params, body, and auth
 - **Request History** -- Automatically records the last 100 requests, searchable and grouped by date
 - **Multi-Tab Interface** -- Work on multiple requests simultaneously with independent state per tab; double-click tab to rename

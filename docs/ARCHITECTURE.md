@@ -130,6 +130,12 @@ All data is persisted in the browser's localStorage:
 - `formatBytes()` / `formatTime()` - Display formatters
 - `tryFormatJson()` - Safe JSON pretty-printing
 
+### Postman Import Module (`src/utils/postman.ts`)
+
+- `isPostmanCollection()` - Detects whether JSON is a Postman v2.1 collection (checks for `info.name` + `item` array)
+- `parsePostmanCollection()` - Converts a Postman v2.1 collection into CurlIt's `{ name, requests }` format
+- Handles: URL objects (raw + parts), headers, body modes (raw/json/xml/formdata/urlencoded), auth (basic/bearer/apikey), and nested folders (flattened)
+
 ### Custom Hooks
 
 - `useResizable()` - Mouse-drag resizable panel behavior with localStorage persistence
