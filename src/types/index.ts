@@ -74,6 +74,8 @@ export interface Tab {
   name: string;
   method: HttpMethod;
   isModified: boolean;
+  collectionId?: string;
+  sourceRequestId?: string;
 }
 
 export function createDefaultRequest(overrides?: Partial<RequestConfig>): RequestConfig {

@@ -90,6 +90,10 @@ interface AppState {
   setActiveEnvironment: (id: string | null) => void;
   getActiveVariables: () => Record<string, string>;
 
+  // Actions - Save
+  saveActiveRequest: () => 'saved' | 'needs-collection';
+  markTabSaved: (tabId: string, collectionId: string, sourceRequestId: string) => void;
+
   // Actions - UI
   setSidebarView: (view: SidebarView) => void;
   toggleSidebar: () => void;
@@ -280,32 +284,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
-  openRequestFromCollection: (_collectionId, requestId) => {
+  openRequestFromCollection: (collectionId, requestId) => {
     const state = get();
-    for (const collection of state.collections) {
-      const request = collection.requests.find(r => r.id === requestId);
-      if (request) {
-        // Check if already open
-        const existingTab = state.tabs.find(t => t.requestId === requestId);
-        if (existingTab) {
-          set({ activeTabId: existingTab.id });
-        } else {
-          const newReq = { ...request };
-          const tab: Tab = {
-            id: newReq.id,
-            requestId: newReq.id,
-            name: newReq.name,
-            method: newReq.method,
-            isModified: false,
-          };
-          set(s => ({
-            tabs: [...s.tabs, tab],
-            activeTabId: tab.id,
-            requests: { ...s.requests, [newReq.id]: newReq },
-          }));
-        }
-        return;
-      }
+    const collection = state.collections.find(c => c.id === collectionId);
+    if (!collection) return;
+    const request = collection.requests.find(r => r.id === requestId);
+    if (!request) return;
+
+    // Check if already open
+    const existingTab = state.tabs.find(t => t.sourceRequestId === requestId && t.collectionId === collectionId);
+    if (existingTab) {
+      set({ activeTabId: existingTab.id });
+    } else {
+      const newReq = { ...request, id: crypto.randomUUID() };
+      const tab: Tab = {
+        id: newReq.id,
+        requestId: newReq.id,
+        name: newReq.name,
+        method: newReq.method,
+        isModified: false,
+        collectionId,
+        sourceRequestId: requestId,
+      };
+      set(s => ({
+        tabs: [...s.tabs, tab],
+        activeTabId: tab.id,
+        requests: { ...s.requests, [newReq.id]: newReq },
+      }));
     }
   },
 
@@ -386,6 +391,48 @@ export const useAppStore = create<AppState>((set, get) => ({
       vars[v.key] = v.value;
     });
     return vars;
+  },
+
+  // Save actions
+  saveActiveRequest: () => {
+    const state = get();
+    const activeTab = state.tabs.find(t => t.id === state.activeTabId);
+    if (!activeTab) return 'needs-collection';
+
+    const request = state.requests[activeTab.requestId];
+    if (!request) return 'needs-collection';
+
+    if (activeTab.collectionId && activeTab.sourceRequestId) {
+      // Save back to source collection in-place
+      const collections = state.collections.map(c => {
+        if (c.id !== activeTab.collectionId) return c;
+        return {
+          ...c,
+          requests: c.requests.map(r =>
+            r.id === activeTab.sourceRequestId ? { ...request, id: activeTab.sourceRequestId! } : r
+          ),
+          updatedAt: Date.now(),
+        };
+      });
+      saveToStorage(STORAGE_KEYS.collections, collections);
+      set({
+        collections,
+        tabs: state.tabs.map(t =>
+          t.id === activeTab.id ? { ...t, isModified: false } : t
+        ),
+      });
+      return 'saved';
+    }
+
+    return 'needs-collection';
+  },
+
+  markTabSaved: (tabId, collectionId, sourceRequestId) => {
+    set(state => ({
+      tabs: state.tabs.map(t =>
+        t.id === tabId ? { ...t, collectionId, sourceRequestId, isModified: false } : t
+      ),
+    }));
   },
 
   // UI actions
