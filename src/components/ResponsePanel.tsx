@@ -115,7 +115,7 @@ export function ResponsePanel({ response, loading }: Props) {
 
         <div className="flex items-center gap-3 text-xs">
           <span className={`font-bold ${getStatusColor(response.status)}`}>
-            {response.status} {response.statusText}
+            {response.status === 0 ? 'Error' : `${response.status} ${response.statusText}`}
           </span>
           <span className="text-dark-400">|</span>
           <span className="text-dark-300">{formatTime(response.time)}</span>
@@ -173,8 +173,13 @@ export function ResponsePanel({ response, loading }: Props) {
             {/* Body content */}
             <div className="flex-1 overflow-auto">
               {response.status === 0 ? (
-                <div className="p-4 text-accent-red text-sm">
-                  <strong>Error:</strong> {response.body}
+                <div className="p-4">
+                  <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-accent-red font-semibold text-sm mb-2">
+                      <span>Request Failed</span>
+                    </div>
+                    <p className="text-dark-200 text-sm whitespace-pre-wrap">{response.body}</p>
+                  </div>
                 </div>
               ) : (
                 <CodeMirror
