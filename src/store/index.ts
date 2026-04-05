@@ -404,6 +404,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (activeTab.collectionId && activeTab.sourceRequestId) {
       // Save back to source collection in-place
+      const collection = state.collections.find(c => c.id === activeTab.collectionId);
+      if (!collection || !collection.requests.some(r => r.id === activeTab.sourceRequestId)) {
+        return 'needs-collection';
+      }
       const collections = state.collections.map(c => {
         if (c.id !== activeTab.collectionId) return c;
         return {
