@@ -54,7 +54,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 ```
 curlit/
 ├── docs/                  # Documentation
-│   ├── IMPLEMENTATION_PLAN.md
+│   ├── ROADMAP.md
 │   ├── ARCHITECTURE.md
 │   └── USER_GUIDE.md
 ├── server/
