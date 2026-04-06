@@ -11,7 +11,30 @@ A fast, modern, open-source API testing tool built as an alternative to Postman.
 
 Try CurlIt in your browser: **[abhimanyusinghal.github.io/curlit](https://abhimanyusinghal.github.io/curlit/)**
 
-> The demo runs entirely in the browser. To make API requests, you'll need to run the proxy server locally (see [Proxy Server](#proxy-server) below).
+The demo is a fully functional static build hosted on GitHub Pages. The UI, collections, environments, history, and all settings work out of the box -- everything is stored in your browser's localStorage.
+
+**To send actual API requests from the demo**, you need a proxy server running (see [Proxy Server](#proxy-server)). The quickest way:
+
+```bash
+git clone https://github.com/abhimanyusinghal/curlit.git
+cd curlit && npm install
+npm run dev:server
+```
+
+Then open the demo, click the **gear icon** (top-left), and set the proxy URL to `http://localhost:3001/api/proxy`.
+
+### What works without a proxy
+
+- Exploring the full UI (request builder, tabs, collections, environments)
+- Importing/exporting cURL commands, Postman collections, and OpenAPI specs
+- Saving and organizing requests into collections
+- Managing environment variables
+- Browsing request history
+
+### What requires the proxy
+
+- Sending HTTP requests to external APIs (the proxy bypasses browser CORS restrictions)
+- Viewing response body, headers, cookies, status codes, and timing
 
 ## Features
 
@@ -135,9 +158,9 @@ All data (collections, environments, history, panel sizes) is persisted in `loca
 
 ## Proxy Server
 
-CurlIt needs a proxy server to make HTTP requests from the browser (to bypass CORS). The proxy is a standalone Express server in `server/proxy.js`.
+CurlIt needs a proxy server to forward HTTP requests from the browser and bypass CORS. The proxy is a standalone Express server in `server/proxy.js` with minimal dependencies (`express` and `cors`).
 
-**Option 1: Run locally**
+### Option 1: Run locally
 
 ```bash
 git clone https://github.com/abhimanyusinghal/curlit.git
@@ -145,11 +168,28 @@ cd curlit && npm install
 npm run dev:server    # starts proxy on http://localhost:3001
 ```
 
-**Option 2: Deploy your own**
+If you're using the live demo, open Settings (gear icon) and set the proxy URL to `http://localhost:3001/api/proxy`.
 
-The proxy server (`server/proxy.js`) can be deployed to any Node.js hosting platform (Railway, Render, Fly.io, etc.). It has minimal dependencies: `express` and `cors`.
+### Option 2: Deploy your own
 
-Once deployed, open the Settings (gear icon) in CurlIt and set your proxy URL (e.g., `https://my-curlit-proxy.railway.app/api/proxy`).
+Deploy `server/proxy.js` to any Node.js hosting platform:
+
+| Platform | Free tier | Deploy |
+|----------|-----------|--------|
+| [Railway](https://railway.app) | $5 credit/month | Connect repo, set start command to `node server/proxy.js` |
+| [Render](https://render.com) | 750 hrs/month | Create Web Service, point to `server/proxy.js` |
+| [Fly.io](https://fly.io) | 3 shared VMs | `fly launch` from the repo root |
+
+Once deployed, open Settings in CurlIt and set your proxy URL (e.g., `https://my-curlit-proxy.railway.app/api/proxy`).
+
+### Limitations
+
+- **CORS on the proxy itself**: If you deploy the proxy to a different domain, the browser will allow it because the proxy has `cors()` middleware enabled for all origins.
+- **Request body size**: The proxy accepts request bodies up to 10 MB.
+- **File uploads**: Binary file uploads are not yet supported through the proxy; form data fields are sent as URL-encoded key-value pairs.
+- **Cookies**: The proxy extracts `Set-Cookie` headers from responses and returns them as data, but does not persist or forward cookies across requests (each request is independent).
+- **HTTPS targets**: The proxy can forward requests to both HTTP and HTTPS endpoints. No additional configuration is needed.
+- **No authentication**: The proxy is open by default. If deploying publicly, consider adding authentication or restricting allowed origins.
 
 ## Contributing
 
