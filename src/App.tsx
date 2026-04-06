@@ -20,6 +20,7 @@ import { ResponsePanel } from './components/ResponsePanel';
 import { Sidebar } from './components/Sidebar';
 import { CurlImportModal } from './components/CurlImportModal';
 import { CurlExportModal } from './components/CurlExportModal';
+import { OpenApiImportModal } from './components/OpenApiImportModal';
 import { SaveRequestModal } from './components/SaveRequestModal';
 import { useResizable } from './hooks/useResizable';
 
@@ -38,6 +39,7 @@ function App() {
 
   const [showCurlImport, setShowCurlImport] = useState(false);
   const [showCurlExport, setShowCurlExport] = useState(false);
+  const [showOpenApiImport, setShowOpenApiImport] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
@@ -135,6 +137,14 @@ function App() {
           )}
 
           <button
+            onClick={() => setShowOpenApiImport(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded-md transition-colors cursor-pointer"
+            title="Import OpenAPI / Swagger"
+          >
+            <FileCode size={13} />
+            OpenAPI
+          </button>
+          <button
             onClick={() => setShowCurlImport(true)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded-md transition-colors cursor-pointer"
             title="Import cURL (Ctrl+I)"
@@ -225,6 +235,7 @@ function App() {
       {/* Modals */}
       <CurlImportModal open={showCurlImport} onClose={() => setShowCurlImport(false)} />
       <CurlExportModal open={showCurlExport} onClose={() => setShowCurlExport(false)} request={activeRequest} />
+      <OpenApiImportModal open={showOpenApiImport} onClose={() => setShowOpenApiImport(false)} />
       <SaveRequestModal open={showSaveModal} onClose={() => setShowSaveModal(false)} />
     </div>
   );

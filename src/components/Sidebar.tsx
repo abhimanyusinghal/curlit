@@ -16,6 +16,7 @@ import { MethodBadge } from './MethodBadge';
 import { KeyValueEditor } from './KeyValueEditor';
 import type { Collection } from '../types';
 import { isPostmanCollection, parsePostmanCollection } from '../utils/postman';
+import { parseOpenApiInput, isOpenApiSpec, parseOpenApiSpec } from '../utils/openapi';
 
 export function Sidebar() {
   const sidebarView = useAppStore(s => s.sidebarView);
@@ -66,6 +67,29 @@ function CollectionsPanel() {
 
   const handleImport = () => {
     try {
+      // Try OpenAPI/Swagger first (supports both JSON and YAML)
+      try {
+        const parsed = parseOpenApiInput(importText);
+        if (isOpenApiSpec(parsed)) {
+          const { name, requests } = parseOpenApiSpec(parsed);
+          useAppStore.getState().createCollection(name);
+          const newCollection = useAppStore.getState().collections[useAppStore.getState().collections.length - 1];
+          requests.forEach(r => {
+            useAppStore.getState().saveRequestToCollection(newCollection.id, r);
+          });
+          // Open the first request in a tab
+          const saved = useAppStore.getState().collections.find(c => c.id === newCollection.id);
+          if (saved && saved.requests.length > 0) {
+            useAppStore.getState().openRequestFromCollection(newCollection.id, saved.requests[0].id);
+          }
+          setImportText('');
+          setShowImport(false);
+          return;
+        }
+      } catch {
+        // Not OpenAPI, continue to try other formats
+      }
+
       const data = JSON.parse(importText);
 
       if (isPostmanCollection(data)) {
@@ -86,14 +110,14 @@ function CollectionsPanel() {
           });
         });
       } else {
-        alert('Unrecognized format. Supported: CurlIt JSON or Postman Collection v2.1');
+        alert('Unrecognized format. Supported: CurlIt JSON, Postman v2.1, or OpenAPI/Swagger');
         return;
       }
 
       setImportText('');
       setShowImport(false);
     } catch {
-      alert('Invalid JSON format');
+      alert('Invalid format. Supported: CurlIt JSON, Postman v2.1, or OpenAPI/Swagger (JSON/YAML)');
     }
   };
 
@@ -127,7 +151,7 @@ function CollectionsPanel() {
           <textarea
             value={importText}
             onChange={e => setImportText(e.target.value)}
-            placeholder='Paste CurlIt or Postman collection JSON...'
+            placeholder='Paste CurlIt, Postman, or OpenAPI/Swagger spec (JSON/YAML)...'
             className="bg-dark-700 border border-dark-600 rounded text-xs p-2 h-24 text-dark-200 resize-none"
           />
           <div className="flex gap-1">
