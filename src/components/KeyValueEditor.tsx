@@ -20,16 +20,27 @@ function pairsToText(pairs: KeyValuePair[]): string {
     .join('\n');
 }
 
-function textToPairs(text: string, descriptionMap: Map<string, string>): KeyValuePair[] {
+// Maps each key to an ordered list of descriptions (supports duplicate keys)
+type DescriptionSnapshot = Map<string, string[]>;
+
+function textToPairs(text: string, descs: DescriptionSnapshot): KeyValuePair[] {
+  // Track how many times we've seen each key so far to index into the descriptions list
+  const keyCounts = new Map<string, number>();
   return text.split('\n')
     .filter(line => line.trim() !== '')
     .map(line => {
       const disabled = line.startsWith('//');
       const content = disabled ? line.slice(2).trimStart() : line;
-      const colonIdx = content.indexOf(': ');
+      const colonIdx = content.indexOf(':');
       const key = colonIdx >= 0 ? content.slice(0, colonIdx) : content;
-      const value = colonIdx >= 0 ? content.slice(colonIdx + 2) : '';
-      const description = descriptionMap.get(key);
+      const afterColon = colonIdx >= 0 ? content.slice(colonIdx + 1) : '';
+      // Strip at most one leading space after the colon (preserves intentional whitespace beyond that)
+      const value = afterColon.startsWith(' ') ? afterColon.slice(1) : afterColon;
+      // Match by key, use positional index among duplicate keys
+      const idx = keyCounts.get(key) ?? 0;
+      keyCounts.set(key, idx + 1);
+      const descList = descs.get(key);
+      const description = descList && idx < descList.length ? descList[idx] : undefined;
       return createKeyValuePair({ key, value, enabled: !disabled, description });
     });
 }
@@ -43,7 +54,7 @@ export function KeyValueEditor({
 }: Props) {
   const [bulkEdit, setBulkEdit] = useState(false);
   const [bulkText, setBulkText] = useState('');
-  const descriptionMapRef = useRef<Map<string, string>>(new Map());
+  const descriptionsRef = useRef<DescriptionSnapshot>(new Map());
   const bulkTextRef = useRef(bulkText);
   const snapshotTextRef = useRef('');
   bulkTextRef.current = bulkText;
@@ -51,7 +62,7 @@ export function KeyValueEditor({
   const commitBulkText = useCallback(() => {
     if (bulkTextRef.current === snapshotTextRef.current) return;
     snapshotTextRef.current = bulkTextRef.current;
-    onChange(textToPairs(bulkTextRef.current, descriptionMapRef.current));
+    onChange(textToPairs(bulkTextRef.current, descriptionsRef.current));
   }, [onChange]);
 
   // Flush local text to store before the component unmounts while still in bulk mode
@@ -70,11 +81,14 @@ export function KeyValueEditor({
   }, [commitBulkText]);
 
   const enterBulkEdit = useCallback(() => {
-    const map = new Map<string, string>();
+    const map: DescriptionSnapshot = new Map();
     for (const p of pairs) {
-      if (p.key && p.description) map.set(p.key, p.description);
+      if (!p.key || !p.description) continue;
+      const list = map.get(p.key);
+      if (list) list.push(p.description);
+      else map.set(p.key, [p.description]);
     }
-    descriptionMapRef.current = map;
+    descriptionsRef.current = map;
     const text = pairsToText(pairs);
     snapshotTextRef.current = text;
     setBulkText(text);
