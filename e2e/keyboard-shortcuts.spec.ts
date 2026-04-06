@@ -32,6 +32,13 @@ test.describe('Keyboard Shortcuts', () => {
     await expect(page.getByRole('heading', { name: 'Import cURL' })).toBeVisible();
   });
 
+  test('Ctrl+D duplicates the active request', async ({ page }) => {
+    const initialTabs = await page.locator('[class*="min-w-"]').count();
+    await page.keyboard.press('Control+d');
+    const newTabs = await page.locator('[class*="min-w-"]').count();
+    expect(newTabs).toBe(initialTabs + 1);
+  });
+
   test('Ctrl+E opens export modal', async ({ page }) => {
     await page.keyboard.press('Control+e');
     await expect(page.locator('text=cURL Export')).toBeVisible();

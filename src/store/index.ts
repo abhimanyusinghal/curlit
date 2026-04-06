@@ -65,6 +65,7 @@ interface AppState {
 
   // Actions - Tabs
   addTab: (request?: Partial<RequestConfig>) => string;
+  duplicateTab: () => void;
   closeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
 
@@ -148,6 +149,32 @@ export const useAppStore = create<AppState>((set, get) => ({
       requests: { ...state.requests, [request.id]: request },
     }));
     return request.id;
+  },
+
+  duplicateTab: () => {
+    const state = get();
+    const activeTab = state.tabs.find(t => t.id === state.activeTabId);
+    if (!activeTab) return;
+    const request = state.requests[activeTab.requestId];
+    if (!request) return;
+
+    const newReq = createDefaultRequest({
+      ...request,
+      id: undefined as unknown as string,
+      name: `${request.name} (copy)`,
+    });
+    const tab: Tab = {
+      id: newReq.id,
+      requestId: newReq.id,
+      name: newReq.name,
+      method: newReq.method,
+      isModified: false,
+    };
+    set(s => ({
+      tabs: [...s.tabs, tab],
+      activeTabId: tab.id,
+      requests: { ...s.requests, [newReq.id]: newReq },
+    }));
   },
 
   closeTab: (tabId) => {

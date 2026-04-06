@@ -35,7 +35,7 @@
 - [x] OpenAPI / Swagger import -- auto-generate requests from a spec
 - [x] Request name editing directly in the tab bar
 - [x] Ctrl+S save workflow -- save back to collection in-place or pick a collection for new requests
-- [ ] Duplicate request (Ctrl+D)
+- [x] Duplicate request (Ctrl+D)
 - [ ] Bulk edit mode for headers and params (raw text editor)
 - [ ] Response search (Ctrl+F within response body)
 
