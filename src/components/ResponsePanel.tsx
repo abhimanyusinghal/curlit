@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import CodeMirror from '@uiw/react-codemirror';
+import { useState, useRef, useCallback } from 'react';
+import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { xml } from '@codemirror/lang-xml';
 import { html } from '@codemirror/lang-html';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { Copy, Check, FileDown } from 'lucide-react';
+import { search, openSearchPanel } from '@codemirror/search';
+import { Copy, Check, FileDown, Search } from 'lucide-react';
 import type { ResponseData } from '../types';
 import { getStatusColor, formatBytes, formatTime, tryFormatJson } from '../utils/http';
 import { useAppStore } from '../store';
@@ -21,6 +22,15 @@ export function ResponsePanel({ response, loading }: Props) {
   const [copied, setCopied] = useState(false);
   const [bodyFormat, setBodyFormat] = useState<'pretty' | 'raw'>('pretty');
   const theme = useAppStore(s => s.theme);
+  const editorRef = useRef<ReactCodeMirrorRef>(null);
+
+  const handleSearch = useCallback(() => {
+    const view = editorRef.current?.view;
+    if (view) {
+      view.focus();
+      openSearchPanel(view);
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -59,9 +69,10 @@ export function ResponsePanel({ response, loading }: Props) {
     response.body.trim().toLowerCase().startsWith('<html');
 
   const getExtensions = () => {
-    if (isJson) return [json()];
-    if (isXml || isHtml) return [isHtml ? html() : xml()];
-    return [];
+    const exts = [search()];
+    if (isJson) exts.push(json());
+    else if (isXml || isHtml) exts.push(isHtml ? html() : xml());
+    return exts;
   };
 
   const displayBody = bodyFormat === 'pretty' && isJson
@@ -156,6 +167,13 @@ export function ResponsePanel({ response, loading }: Props) {
               </div>
               <div className="flex items-center gap-1">
                 <button
+                  onClick={handleSearch}
+                  className="p-1.5 text-dark-400 hover:text-dark-200 rounded transition-colors cursor-pointer"
+                  title="Search response (Ctrl+F)"
+                >
+                  <Search size={14} />
+                </button>
+                <button
                   onClick={copyToClipboard}
                   className="p-1.5 text-dark-400 hover:text-dark-200 rounded transition-colors cursor-pointer"
                   title="Copy response"
@@ -173,7 +191,12 @@ export function ResponsePanel({ response, loading }: Props) {
             </div>
 
             {/* Body content */}
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-auto" onKeyDown={e => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                handleSearch();
+              }
+            }}>
               {response.status === 0 ? (
                 <div className="p-4">
                   <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg p-4">
@@ -185,6 +208,7 @@ export function ResponsePanel({ response, loading }: Props) {
                 </div>
               ) : (
                 <CodeMirror
+                  ref={editorRef}
                   value={displayBody}
                   extensions={getExtensions()}
                   theme={theme === 'dark' ? oneDark : 'light'}
@@ -194,6 +218,7 @@ export function ResponsePanel({ response, loading }: Props) {
                     lineNumbers: true,
                     foldGutter: true,
                     highlightActiveLine: false,
+                    searchKeymap: false,
                   }}
                 />
               )}
