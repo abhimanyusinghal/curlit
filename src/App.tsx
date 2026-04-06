@@ -84,6 +84,10 @@ function App() {
           e.preventDefault();
           useAppStore.getState().addTab();
           break;
+        case 'd':
+          e.preventDefault();
+          useAppStore.getState().duplicateTab();
+          break;
         case 's':
           e.preventDefault();
           {
@@ -228,7 +232,7 @@ function App() {
         </div>
         <div className="flex items-center gap-1">
           <Keyboard size={10} />
-          <span>Ctrl+S Save | Ctrl+N New | Ctrl+I Import | Ctrl+E Export | Ctrl+B Sidebar</span>
+          <span>Ctrl+S Save | Ctrl+N New | Ctrl+D Duplicate | Ctrl+I Import | Ctrl+E Export | Ctrl+B Sidebar</span>
         </div>
       </footer>
 
