@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { Plus, Trash2, AlignJustify, List } from 'lucide-react';
 import type { KeyValuePair } from '../types';
 import { createKeyValuePair } from '../types';
@@ -21,15 +21,17 @@ function pairsToText(pairs: KeyValuePair[]): string {
 }
 
 function textToPairs(text: string, descriptionMap: Map<string, string>): KeyValuePair[] {
-  return text.split('\n').map(line => {
-    const disabled = line.startsWith('//');
-    const content = disabled ? line.slice(2).trimStart() : line;
-    const colonIdx = content.indexOf(': ');
-    const key = colonIdx >= 0 ? content.slice(0, colonIdx) : content;
-    const value = colonIdx >= 0 ? content.slice(colonIdx + 2) : '';
-    const description = descriptionMap.get(key);
-    return createKeyValuePair({ key, value, enabled: !disabled, description });
-  });
+  return text.split('\n')
+    .filter(line => line.trim() !== '')
+    .map(line => {
+      const disabled = line.startsWith('//');
+      const content = disabled ? line.slice(2).trimStart() : line;
+      const colonIdx = content.indexOf(': ');
+      const key = colonIdx >= 0 ? content.slice(0, colonIdx) : content;
+      const value = colonIdx >= 0 ? content.slice(colonIdx + 2) : '';
+      const description = descriptionMap.get(key);
+      return createKeyValuePair({ key, value, enabled: !disabled, description });
+    });
 }
 
 export function KeyValueEditor({
@@ -40,9 +42,21 @@ export function KeyValueEditor({
   showDescription = false,
 }: Props) {
   const [bulkEdit, setBulkEdit] = useState(false);
+  const [bulkText, setBulkText] = useState('');
   const descriptionMapRef = useRef<Map<string, string>>(new Map());
+  const bulkTextRef = useRef(bulkText);
+  bulkTextRef.current = bulkText;
 
-  const bulkText = useMemo(() => bulkEdit ? pairsToText(pairs) : '', [bulkEdit, pairs]);
+  const commitBulkText = useCallback(() => {
+    onChange(textToPairs(bulkTextRef.current, descriptionMapRef.current));
+  }, [onChange]);
+
+  // Flush local text to store before the component unmounts while still in bulk mode
+  // (e.g. user switches to a different request tab or closes the tab)
+  useEffect(() => {
+    if (!bulkEdit) return;
+    return () => commitBulkText();
+  }, [bulkEdit, commitBulkText]);
 
   const enterBulkEdit = useCallback(() => {
     const map = new Map<string, string>();
@@ -50,12 +64,14 @@ export function KeyValueEditor({
       if (p.key && p.description) map.set(p.key, p.description);
     }
     descriptionMapRef.current = map;
+    setBulkText(pairsToText(pairs));
     setBulkEdit(true);
   }, [pairs]);
 
-  const handleBulkChange = useCallback((text: string) => {
-    onChange(textToPairs(text, descriptionMapRef.current));
-  }, [onChange]);
+  const exitBulkEdit = useCallback(() => {
+    commitBulkText();
+    setBulkEdit(false);
+  }, [commitBulkText]);
 
   const updatePair = (id: string, updates: Partial<KeyValuePair>) => {
     onChange(pairs.map(p => (p.id === id ? { ...p, ...updates } : p)));
@@ -79,7 +95,7 @@ export function KeyValueEditor({
       {/* Toolbar */}
       <div className="flex items-center justify-end px-2 py-0.5">
         <button
-          onClick={bulkEdit ? () => setBulkEdit(false) : enterBulkEdit}
+          onClick={bulkEdit ? exitBulkEdit : enterBulkEdit}
           className="flex items-center gap-1 px-2 py-1 text-[11px] text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded transition-colors cursor-pointer"
           title={bulkEdit ? 'Switch to form view' : 'Bulk edit as text'}
         >
@@ -91,7 +107,8 @@ export function KeyValueEditor({
       {bulkEdit ? (
         <textarea
           value={bulkText}
-          onChange={e => handleBulkChange(e.target.value)}
+          onChange={e => setBulkText(e.target.value)}
+          onBlur={commitBulkText}
           placeholder={placeholderText}
           spellCheck={false}
           className="w-full min-h-[180px] bg-dark-800 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 font-mono placeholder:text-dark-400 resize-y focus:outline-none focus:border-accent-blue"
