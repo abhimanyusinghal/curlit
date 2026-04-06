@@ -24,9 +24,9 @@ function textToPairs(text: string, descriptionMap: Map<string, string>): KeyValu
   return text.split('\n').map(line => {
     const disabled = line.startsWith('//');
     const content = disabled ? line.slice(2).trimStart() : line;
-    const colonIdx = content.indexOf(':');
-    const key = colonIdx >= 0 ? content.slice(0, colonIdx).trim() : content.trim();
-    const value = colonIdx >= 0 ? content.slice(colonIdx + 1).trimStart() : '';
+    const colonIdx = content.indexOf(': ');
+    const key = colonIdx >= 0 ? content.slice(0, colonIdx) : content;
+    const value = colonIdx >= 0 ? content.slice(colonIdx + 2) : '';
     const description = descriptionMap.get(key);
     return createKeyValuePair({ key, value, enabled: !disabled, description });
   });
@@ -40,8 +40,9 @@ export function KeyValueEditor({
   showDescription = false,
 }: Props) {
   const [bulkEdit, setBulkEdit] = useState(false);
-  const [bulkText, setBulkText] = useState('');
   const descriptionMapRef = useRef<Map<string, string>>(new Map());
+
+  const bulkText = useMemo(() => bulkEdit ? pairsToText(pairs) : '', [bulkEdit, pairs]);
 
   const enterBulkEdit = useCallback(() => {
     const map = new Map<string, string>();
@@ -49,14 +50,12 @@ export function KeyValueEditor({
       if (p.key && p.description) map.set(p.key, p.description);
     }
     descriptionMapRef.current = map;
-    setBulkText(pairsToText(pairs));
     setBulkEdit(true);
   }, [pairs]);
 
-  const exitBulkEdit = useCallback(() => {
-    onChange(textToPairs(bulkText, descriptionMapRef.current));
-    setBulkEdit(false);
-  }, [bulkText, onChange]);
+  const handleBulkChange = useCallback((text: string) => {
+    onChange(textToPairs(text, descriptionMapRef.current));
+  }, [onChange]);
 
   const updatePair = (id: string, updates: Partial<KeyValuePair>) => {
     onChange(pairs.map(p => (p.id === id ? { ...p, ...updates } : p)));
@@ -80,7 +79,7 @@ export function KeyValueEditor({
       {/* Toolbar */}
       <div className="flex items-center justify-end px-2 py-0.5">
         <button
-          onClick={bulkEdit ? exitBulkEdit : enterBulkEdit}
+          onClick={bulkEdit ? () => setBulkEdit(false) : enterBulkEdit}
           className="flex items-center gap-1 px-2 py-1 text-[11px] text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded transition-colors cursor-pointer"
           title={bulkEdit ? 'Switch to form view' : 'Bulk edit as text'}
         >
@@ -92,7 +91,7 @@ export function KeyValueEditor({
       {bulkEdit ? (
         <textarea
           value={bulkText}
-          onChange={e => setBulkText(e.target.value)}
+          onChange={e => handleBulkChange(e.target.value)}
           placeholder={placeholderText}
           spellCheck={false}
           className="w-full min-h-[180px] bg-dark-800 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 font-mono placeholder:text-dark-400 resize-y focus:outline-none focus:border-accent-blue"
