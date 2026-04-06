@@ -45,9 +45,12 @@ export function KeyValueEditor({
   const [bulkText, setBulkText] = useState('');
   const descriptionMapRef = useRef<Map<string, string>>(new Map());
   const bulkTextRef = useRef(bulkText);
+  const snapshotTextRef = useRef('');
   bulkTextRef.current = bulkText;
 
   const commitBulkText = useCallback(() => {
+    if (bulkTextRef.current === snapshotTextRef.current) return;
+    snapshotTextRef.current = bulkTextRef.current;
     onChange(textToPairs(bulkTextRef.current, descriptionMapRef.current));
   }, [onChange]);
 
@@ -58,13 +61,23 @@ export function KeyValueEditor({
     return () => commitBulkText();
   }, [bulkEdit, commitBulkText]);
 
+  // Flush before global keyboard shortcuts (Ctrl+S, Ctrl+E, etc.) read the store.
+  // This keydown fires before App's global handler due to DOM event bubbling.
+  const handleBulkKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      commitBulkText();
+    }
+  }, [commitBulkText]);
+
   const enterBulkEdit = useCallback(() => {
     const map = new Map<string, string>();
     for (const p of pairs) {
       if (p.key && p.description) map.set(p.key, p.description);
     }
     descriptionMapRef.current = map;
-    setBulkText(pairsToText(pairs));
+    const text = pairsToText(pairs);
+    snapshotTextRef.current = text;
+    setBulkText(text);
     setBulkEdit(true);
   }, [pairs]);
 
@@ -109,6 +122,7 @@ export function KeyValueEditor({
           value={bulkText}
           onChange={e => setBulkText(e.target.value)}
           onBlur={commitBulkText}
+          onKeyDown={handleBulkKeyDown}
           placeholder={placeholderText}
           spellCheck={false}
           className="w-full min-h-[180px] bg-dark-800 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 font-mono placeholder:text-dark-400 resize-y focus:outline-none focus:border-accent-blue"
