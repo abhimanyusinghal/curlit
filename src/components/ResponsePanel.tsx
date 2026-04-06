@@ -166,13 +166,15 @@ export function ResponsePanel({ response, loading }: Props) {
                 </button>
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={handleSearch}
-                  className="p-1.5 text-dark-400 hover:text-dark-200 rounded transition-colors cursor-pointer"
-                  title="Search response (Ctrl+F)"
-                >
-                  <Search size={14} />
-                </button>
+                {response.status !== 0 && (
+                  <button
+                    onClick={handleSearch}
+                    className="p-1.5 text-dark-400 hover:text-dark-200 rounded transition-colors cursor-pointer"
+                    title="Search response (Ctrl+F)"
+                  >
+                    <Search size={14} />
+                  </button>
+                )}
                 <button
                   onClick={copyToClipboard}
                   className="p-1.5 text-dark-400 hover:text-dark-200 rounded transition-colors cursor-pointer"
@@ -191,12 +193,12 @@ export function ResponsePanel({ response, loading }: Props) {
             </div>
 
             {/* Body content */}
-            <div className="flex-1 overflow-auto" onKeyDown={e => {
+            <div className="flex-1 overflow-auto" onKeyDown={response.status !== 0 ? e => {
               if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
                 e.preventDefault();
                 handleSearch();
               }
-            }}>
+            } : undefined}>
               {response.status === 0 ? (
                 <div className="p-4">
                   <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg p-4">
@@ -218,7 +220,6 @@ export function ResponsePanel({ response, loading }: Props) {
                     lineNumbers: true,
                     foldGutter: true,
                     highlightActiveLine: false,
-                    searchKeymap: false,
                   }}
                 />
               )}
