@@ -32,7 +32,7 @@ function textToPairs(text: string, descs: DescriptionSnapshot): KeyValuePair[] {
       const disabled = line.startsWith('//');
       const content = disabled ? line.slice(2).trimStart() : line;
       const colonIdx = content.indexOf(':');
-      const key = colonIdx >= 0 ? content.slice(0, colonIdx) : content;
+      const key = colonIdx >= 0 ? content.slice(0, colonIdx).trim() : content.trim();
       const afterColon = colonIdx >= 0 ? content.slice(colonIdx + 1) : '';
       // Strip at most one leading space after the colon (preserves intentional whitespace beyond that)
       const value = afterColon.startsWith(' ') ? afterColon.slice(1) : afterColon;
