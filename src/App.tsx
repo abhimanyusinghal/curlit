@@ -11,6 +11,7 @@ import {
   GripHorizontal,
   Sun,
   Moon,
+  Settings,
 } from 'lucide-react';
 import { useAppStore } from './store';
 import { RequestTabs } from './components/RequestTabs';
@@ -22,6 +23,7 @@ import { CurlImportModal } from './components/CurlImportModal';
 import { CurlExportModal } from './components/CurlExportModal';
 import { OpenApiImportModal } from './components/OpenApiImportModal';
 import { SaveRequestModal } from './components/SaveRequestModal';
+import { ProxySettingsModal } from './components/ProxySettingsModal';
 import { useResizable } from './hooks/useResizable';
 
 function App() {
@@ -41,6 +43,7 @@ function App() {
   const [showCurlExport, setShowCurlExport] = useState(false);
   const [showOpenApiImport, setShowOpenApiImport] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showProxySettings, setShowProxySettings] = useState(false);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
   const activeRequest = activeTab ? requests[activeTab.requestId] : null;
@@ -129,6 +132,13 @@ function App() {
             title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button
+            onClick={() => setShowProxySettings(true)}
+            className="p-1.5 text-dark-400 hover:text-dark-200 rounded transition-colors cursor-pointer"
+            title="Proxy settings"
+          >
+            <Settings size={16} />
           </button>
         </div>
 
@@ -241,6 +251,7 @@ function App() {
       <CurlExportModal open={showCurlExport} onClose={() => setShowCurlExport(false)} request={activeRequest} />
       <OpenApiImportModal open={showOpenApiImport} onClose={() => setShowOpenApiImport(false)} />
       <SaveRequestModal open={showSaveModal} onClose={() => setShowSaveModal(false)} />
+      <ProxySettingsModal open={showProxySettings} onClose={() => setShowProxySettings(false)} />
     </div>
   );
 }

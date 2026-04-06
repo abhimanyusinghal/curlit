@@ -7,6 +7,12 @@ A fast, modern, open-source API testing tool built as an alternative to Postman.
 ![React](https://img.shields.io/badge/React-19-61dafb)
 ![Vite](https://img.shields.io/badge/Vite-5-646cff)
 
+## Live Demo
+
+Try CurlIt in your browser: **[abhimanyusinghal.github.io/curlit](https://abhimanyusinghal.github.io/curlit/)**
+
+> The demo runs entirely in the browser. To make API requests, you'll need to run the proxy server locally (see [Proxy Server](#proxy-server) below).
+
 ## Features
 
 - **Full HTTP Client** -- GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS with color-coded method badges
@@ -126,6 +132,24 @@ npm run test:e2e
 CurlIt runs a lightweight Express proxy server alongside the Vite dev server. When you send a request, the frontend POSTs the request configuration to `/api/proxy`, which forwards it to the target API using Node.js `fetch`. This avoids browser CORS restrictions and returns the full response (status, headers, body, cookies) back to the UI.
 
 All data (collections, environments, history, panel sizes) is persisted in `localStorage` -- no database or account required.
+
+## Proxy Server
+
+CurlIt needs a proxy server to make HTTP requests from the browser (to bypass CORS). The proxy is a standalone Express server in `server/proxy.js`.
+
+**Option 1: Run locally**
+
+```bash
+git clone https://github.com/abhimanyusinghal/curlit.git
+cd curlit && npm install
+npm run dev:server    # starts proxy on http://localhost:3001
+```
+
+**Option 2: Deploy your own**
+
+The proxy server (`server/proxy.js`) can be deployed to any Node.js hosting platform (Railway, Render, Fly.io, etc.). It has minimal dependencies: `express` and `cors`.
+
+Once deployed, open the Settings (gear icon) in CurlIt and set your proxy URL (e.g., `https://my-curlit-proxy.railway.app/api/proxy`).
 
 ## Contributing
 

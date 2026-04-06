@@ -1,5 +1,20 @@
 import type { RequestConfig, ResponseData, KeyValuePair, AuthConfig } from '../types';
 
+const DEFAULT_PROXY_PATH = '/api/proxy';
+const PROXY_URL_KEY = 'curlit_proxy_url';
+
+export function getProxyUrl(): string {
+  return localStorage.getItem(PROXY_URL_KEY) || DEFAULT_PROXY_PATH;
+}
+
+export function setProxyUrl(url: string): void {
+  if (url && url !== DEFAULT_PROXY_PATH) {
+    localStorage.setItem(PROXY_URL_KEY, url);
+  } else {
+    localStorage.removeItem(PROXY_URL_KEY);
+  }
+}
+
 export function buildUrl(baseUrl: string, params: KeyValuePair[]): string {
   const enabledParams = params.filter(p => p.enabled && p.key);
   if (enabledParams.length === 0) return baseUrl;
@@ -147,20 +162,37 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
   }
 
   // Use proxy server to avoid CORS
-  const proxyUrl = '/api/proxy';
+  const proxyUrl = getProxyUrl();
   const startTime = performance.now();
 
-  const response = await fetch(proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      method: request.method,
-      url: finalUrl,
-      headers,
-      body: body instanceof FormData ? Object.fromEntries(body) : body,
-      bodyType: request.body.type,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        method: request.method,
+        url: finalUrl,
+        headers,
+        body: body instanceof FormData ? Object.fromEntries(body) : body,
+        bodyType: request.body.type,
+      }),
+    });
+  } catch {
+    const isCustomProxy = proxyUrl !== DEFAULT_PROXY_PATH;
+    const hint = isCustomProxy
+      ? `Could not reach the proxy server at ${proxyUrl}.\nCheck that your proxy is running and the URL is correct.`
+      : `Could not reach the proxy server.\n\nCurlIt needs a proxy server to make HTTP requests and bypass CORS.\n\nTo set up the proxy:\n  1. Clone the repo: git clone https://github.com/abhimanyusinghal/curlit.git\n  2. Install deps: npm install\n  3. Start proxy: npm run dev:server\n\nOr set a custom proxy URL in Settings.`;
+    return {
+      status: 0,
+      statusText: 'Error',
+      headers: {},
+      body: hint,
+      size: 0,
+      time: Math.round(performance.now() - startTime),
+      cookies: [],
+    };
+  }
 
   const elapsed = performance.now() - startTime;
   const data = await response.json();
