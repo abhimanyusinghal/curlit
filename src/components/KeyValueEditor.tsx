@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useRef, useMemo, useCallback } from 'react';
 import { Plus, Trash2, AlignJustify, List } from 'lucide-react';
 import type { KeyValuePair } from '../types';
 import { createKeyValuePair } from '../types';
@@ -20,14 +20,15 @@ function pairsToText(pairs: KeyValuePair[]): string {
     .join('\n');
 }
 
-function textToPairs(text: string): KeyValuePair[] {
+function textToPairs(text: string, descriptionMap: Map<string, string>): KeyValuePair[] {
   return text.split('\n').map(line => {
     const disabled = line.startsWith('//');
     const content = disabled ? line.slice(2).trimStart() : line;
     const colonIdx = content.indexOf(':');
     const key = colonIdx >= 0 ? content.slice(0, colonIdx).trim() : content.trim();
     const value = colonIdx >= 0 ? content.slice(colonIdx + 1).trimStart() : '';
-    return createKeyValuePair({ key, value, enabled: !disabled });
+    const description = descriptionMap.get(key);
+    return createKeyValuePair({ key, value, enabled: !disabled, description });
   });
 }
 
@@ -40,14 +41,20 @@ export function KeyValueEditor({
 }: Props) {
   const [bulkEdit, setBulkEdit] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const descriptionMapRef = useRef<Map<string, string>>(new Map());
 
   const enterBulkEdit = useCallback(() => {
+    const map = new Map<string, string>();
+    for (const p of pairs) {
+      if (p.key && p.description) map.set(p.key, p.description);
+    }
+    descriptionMapRef.current = map;
     setBulkText(pairsToText(pairs));
     setBulkEdit(true);
   }, [pairs]);
 
   const exitBulkEdit = useCallback(() => {
-    onChange(textToPairs(bulkText));
+    onChange(textToPairs(bulkText, descriptionMapRef.current));
     setBulkEdit(false);
   }, [bulkText, onChange]);
 
