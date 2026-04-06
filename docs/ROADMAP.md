@@ -32,7 +32,7 @@
 
 - [x] Light theme / theme toggle
 - [x] Postman collection import (JSON v2.1 format)
-- [ ] OpenAPI / Swagger import -- auto-generate requests from a spec
+- [x] OpenAPI / Swagger import -- auto-generate requests from a spec
 - [x] Request name editing directly in the tab bar
 - [x] Ctrl+S save workflow -- save back to collection in-place or pick a collection for new requests
 - [ ] Duplicate request (Ctrl+D)
