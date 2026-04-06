@@ -842,9 +842,11 @@ describe('parseOpenApiSpec - request body', () => {
     });
 
     expect(result.requests[0].body.type).toBe('form-data');
-    // file type is filtered out
-    expect(result.requests[0].body.formData).toHaveLength(1);
-    expect(result.requests[0].body.formData[0].key).toBe('name');
+    expect(result.requests[0].body.formData).toHaveLength(2);
+    expect(result.requests[0].body.formData[0].key).toBe('file');
+    expect(result.requests[0].body.formData[0].valueType).toBe('file');
+    expect(result.requests[0].body.formData[1].key).toBe('name');
+    expect(result.requests[0].body.formData[1].valueType).toBe('text');
   });
 
   it('skips readOnly properties in body', () => {

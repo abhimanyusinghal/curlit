@@ -1,6 +1,6 @@
 import yaml from 'js-yaml';
-import type { RequestConfig, KeyValuePair, AuthConfig, BodyType, HttpMethod } from '../types';
-import { createDefaultRequest, createKeyValuePair } from '../types';
+import type { RequestConfig, KeyValuePair, AuthConfig, BodyType, HttpMethod, FormDataEntry } from '../types';
+import { createDefaultRequest, createKeyValuePair, createFormDataEntry } from '../types';
 
 // ─── OpenAPI / Swagger Types ────────────────────────────────────────────────
 
@@ -747,14 +747,13 @@ function extractBody(
         body: {
           type: 'form-data',
           raw: '',
-          formData: formParams
-            .filter(p => p.type !== 'file')
-            .map(p =>
-              createKeyValuePair({
+          formData: formParams.map(p =>
+              createFormDataEntry({
                 key: p.name,
-                value: getParamExample(spec, p),
+                value: p.type === 'file' ? '' : getParamExample(spec, p),
                 enabled: true,
                 description: p.description,
+                valueType: p.type === 'file' ? 'file' : 'text',
               })
             ),
           urlencoded: [],
@@ -810,7 +809,7 @@ function convertRequestBody(spec: OpenApiSpec, requestBody: RequestBody): BodyRe
 
     if (bodyType === 'form-data') {
       const pairs = schemaToKeyValuePairs(spec, media.schema);
-      return { body: { type: 'form-data', raw: '', formData: pairs, urlencoded: [] }, contentType: matchedKey };
+      return { body: { type: 'form-data', raw: '', formData: pairsToFormDataEntries(pairs), urlencoded: [] }, contentType: matchedKey };
     }
     if (bodyType === 'x-www-form-urlencoded') {
       const pairs = schemaToKeyValuePairs(spec, media.schema);
@@ -835,7 +834,7 @@ function convertRequestBody(spec: OpenApiSpec, requestBody: RequestBody): BodyRe
     const bodyType = contentTypeToBodyType(firstKey);
     const media = content[firstKey];
     if (bodyType === 'form-data') {
-      return { body: { type: 'form-data', raw: '', formData: schemaToKeyValuePairs(spec, media.schema), urlencoded: [] }, contentType: firstKey };
+      return { body: { type: 'form-data', raw: '', formData: pairsToFormDataEntries(schemaToKeyValuePairs(spec, media.schema)), urlencoded: [] }, contentType: firstKey };
     }
     if (bodyType === 'x-www-form-urlencoded') {
       return { body: { type: 'x-www-form-urlencoded', raw: '', formData: [], urlencoded: schemaToKeyValuePairs(spec, media.schema) }, contentType: firstKey };
@@ -876,6 +875,10 @@ function getMediaExample(spec: OpenApiSpec, media: MediaType): unknown {
     return generateSchemaExample(spec, media.schema, new Set());
   }
   return '';
+}
+
+function pairsToFormDataEntries(pairs: KeyValuePair[]): FormDataEntry[] {
+  return pairs.map(p => ({ ...p, valueType: 'text' as const }));
 }
 
 function schemaToKeyValuePairs(spec: OpenApiSpec, schema?: SchemaObject): KeyValuePair[] {

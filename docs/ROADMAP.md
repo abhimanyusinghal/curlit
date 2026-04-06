@@ -41,7 +41,7 @@
 
 ### v1.2 -- Advanced Request Features
 
-- [ ] File upload support in Form Data body type
+- [x] File upload support in Form Data body type
 - [ ] Binary body support
 - [ ] GraphQL mode with query/variables editor and schema introspection
 - [ ] OAuth 2.0 authentication flow (authorization code, client credentials)
