@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { xml } from '@codemirror/lang-xml';
@@ -216,6 +216,13 @@ function AuthEditor({ request }: { request: RequestConfig }) {
   const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [authCode, setAuthCode] = useState('');
+
+  // Reset transient OAuth state when switching between requests
+  useEffect(() => {
+    setTokenError(null);
+    setAuthCode('');
+    setTokenLoading(false);
+  }, [request.id]);
 
   const authTypes: { id: AuthType; label: string }[] = [
     { id: 'none', label: 'No Auth' },

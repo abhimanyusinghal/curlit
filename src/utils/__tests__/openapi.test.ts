@@ -1237,6 +1237,62 @@ describe('parseOpenApiSpec - authentication', () => {
     expect(result.requests[0].auth.oauth2?.scope).toBe('read');
   });
 
+  it('uses operation-required scopes instead of all flow scopes for OAuth2', () => {
+    const result = parseOpenApiSpec({
+      openapi: '3.0.0',
+      info: { title: 'API', version: '1.0' },
+      paths: {
+        '/narrow': {
+          get: { security: [{ OAuth: ['read'] }] },
+        },
+      },
+      components: {
+        securitySchemes: {
+          OAuth: {
+            type: 'oauth2',
+            flows: {
+              authorizationCode: {
+                authorizationUrl: 'https://auth.example.com/authorize',
+                tokenUrl: 'https://auth.example.com/token',
+                scopes: { read: 'Read', write: 'Write', admin: 'Admin' },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Operation only requires "read", not all three flow scopes
+    expect(result.requests[0].auth.oauth2?.scope).toBe('read');
+  });
+
+  it('falls back to all flow scopes when operation specifies empty scope list', () => {
+    const result = parseOpenApiSpec({
+      openapi: '3.0.0',
+      info: { title: 'API', version: '1.0' },
+      paths: {
+        '/all': {
+          get: { security: [{ OAuth: [] }] },
+        },
+      },
+      components: {
+        securitySchemes: {
+          OAuth: {
+            type: 'oauth2',
+            flows: {
+              clientCredentials: {
+                tokenUrl: 'https://auth.example.com/token',
+                scopes: { read: 'Read', write: 'Write' },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.requests[0].auth.oauth2?.scope).toBe('read write');
+  });
+
   it('operation-level security overrides global', () => {
     const result = parseOpenApiSpec({
       openapi: '3.0.0',

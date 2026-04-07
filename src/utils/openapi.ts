@@ -1180,13 +1180,14 @@ function extractAuth(spec: OpenApiSpec, operation: Operation): AuthConfig {
     if (!rawScheme) continue;
 
     const scheme = resolveSecuritySchemeRef(spec, rawScheme as SecuritySchemeOrRef);
-    return convertSecurityScheme(scheme);
+    const requiredScopes = req[schemeName] || [];
+    return convertSecurityScheme(scheme, requiredScopes);
   }
 
   return { type: 'none' };
 }
 
-function convertSecurityScheme(scheme: SecurityScheme): AuthConfig {
+function convertSecurityScheme(scheme: SecurityScheme, requiredScopes: string[] = []): AuthConfig {
   // OpenAPI 3.x "http" type
   if (scheme.type === 'http') {
     if (scheme.scheme?.toLowerCase() === 'basic') {
@@ -1218,8 +1219,13 @@ function convertSecurityScheme(scheme: SecurityScheme): AuthConfig {
 
   // OAuth2 — map to OAuth 2.0 auth config with flow details
   // Prefer authorizationCode (more complete: has both authUrl + tokenUrl)
+  // Use operation-level required scopes when available; fall back to all flow scopes
   if (scheme.type === 'oauth2') {
     const flows = scheme.flows;
+    const scopeStr = (flow: OAuthFlow | undefined) =>
+      requiredScopes.length > 0
+        ? requiredScopes.join(' ')
+        : flow?.scopes ? Object.keys(flow.scopes).join(' ') : '';
     if (flows?.authorizationCode) {
       return {
         type: 'oauth2',
@@ -1229,7 +1235,7 @@ function convertSecurityScheme(scheme: SecurityScheme): AuthConfig {
           tokenUrl: flows.authorizationCode.tokenUrl || '',
           clientId: '',
           clientSecret: '',
-          scope: flows.authorizationCode.scopes ? Object.keys(flows.authorizationCode.scopes).join(' ') : '',
+          scope: scopeStr(flows.authorizationCode),
           callbackUrl: '',
         },
       };
@@ -1243,7 +1249,7 @@ function convertSecurityScheme(scheme: SecurityScheme): AuthConfig {
           tokenUrl: flows.clientCredentials.tokenUrl || '',
           clientId: '',
           clientSecret: '',
-          scope: flows.clientCredentials.scopes ? Object.keys(flows.clientCredentials.scopes).join(' ') : '',
+          scope: scopeStr(flows.clientCredentials),
           callbackUrl: '',
         },
       };
