@@ -5,6 +5,7 @@ import { createFormDataEntry } from '../types';
 import { setFile, removeFile, getFile } from '../utils/fileStore';
 
 interface Props {
+  requestId: string;
   entries: FormDataEntry[];
   onChange: (entries: FormDataEntry[]) => void;
 }
@@ -17,7 +18,7 @@ function formatFileSize(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-export function FormDataEditor({ entries, onChange }: Props) {
+export function FormDataEditor({ requestId, entries, onChange }: Props) {
   const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   const updateEntry = (id: string, updates: Partial<FormDataEntry>) => {
@@ -25,7 +26,7 @@ export function FormDataEditor({ entries, onChange }: Props) {
   };
 
   const removeEntry = (id: string) => {
-    removeFile(id);
+    removeFile(requestId, id);
     onChange(entries.filter(e => e.id !== id));
   };
 
@@ -34,9 +35,9 @@ export function FormDataEditor({ entries, onChange }: Props) {
   };
 
   const handleTypeChange = (entry: FormDataEntry, valueType: 'text' | 'file') => {
-    if (valueType === entry.valueType) return;
-    if (entry.valueType === 'file') {
-      removeFile(entry.id);
+    if (valueType === (entry.valueType || 'text')) return;
+    if ((entry.valueType || 'text') === 'file') {
+      removeFile(requestId, entry.id);
     }
     updateEntry(entry.id, {
       valueType,
@@ -48,7 +49,7 @@ export function FormDataEditor({ entries, onChange }: Props) {
   };
 
   const handleFileSelect = (entry: FormDataEntry, file: File) => {
-    setFile(entry.id, file);
+    setFile(requestId, entry.id, file);
     updateEntry(entry.id, {
       fileName: file.name,
       fileSize: file.size,
@@ -57,7 +58,7 @@ export function FormDataEditor({ entries, onChange }: Props) {
   };
 
   const handleRemoveFile = (entry: FormDataEntry) => {
-    removeFile(entry.id);
+    removeFile(requestId, entry.id);
     updateEntry(entry.id, {
       fileName: undefined,
       fileSize: undefined,
@@ -94,7 +95,7 @@ export function FormDataEditor({ entries, onChange }: Props) {
           />
 
           <select
-            value={entry.valueType}
+            value={entry.valueType || 'text'}
             onChange={e => handleTypeChange(entry, e.target.value as 'text' | 'file')}
             className="bg-dark-800 border border-dark-600 rounded px-1.5 py-1.5 text-xs text-dark-100 cursor-pointer focus:outline-none focus:border-accent-blue"
           >
@@ -110,7 +111,7 @@ export function FormDataEditor({ entries, onChange }: Props) {
             className="bg-dark-800 border border-dark-600 rounded px-2 py-1.5 text-sm text-dark-100 placeholder:text-dark-400"
           />
 
-          {entry.valueType === 'text' ? (
+          {(entry.valueType || 'text') === 'text' ? (
             <input
               type="text"
               value={entry.value}
@@ -130,7 +131,7 @@ export function FormDataEditor({ entries, onChange }: Props) {
                       ({formatFileSize(entry.fileSize)})
                     </span>
                   )}
-                  {!getFile(entry.id) && (
+                  {!getFile(requestId, entry.id) && (
                     <span className="text-accent-yellow text-xs shrink-0" title="File not in memory — re-select to send">
                       (stale)
                     </span>

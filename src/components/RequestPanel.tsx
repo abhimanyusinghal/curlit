@@ -158,6 +158,7 @@ function BodyEditor({ request }: { request: RequestConfig }) {
 
       {request.body.type === 'form-data' && (
         <FormDataEditor
+          requestId={request.id}
           entries={request.body.formData}
           onChange={formData => updateBody({ formData })}
         />

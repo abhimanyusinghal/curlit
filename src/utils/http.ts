@@ -52,7 +52,7 @@ export function buildBody(request: RequestConfig): string | FormData | null {
       const formData = new FormData();
       request.body.formData.filter(f => f.enabled && f.key).forEach(f => {
         if (f.valueType === 'file') {
-          const file = getFile(f.id);
+          const file = getFile(request.id, f.id);
           if (file) formData.append(f.key, file, file.name);
         } else {
           formData.append(f.key, f.value);
@@ -132,12 +132,13 @@ function resolveAuthVariables(auth: AuthConfig, variables: Record<string, string
 }
 
 async function serializeFormDataEntries(
+  requestId: string,
   entries: FormDataEntry[],
 ): Promise<{ key: string; value: string; type: 'text' | 'file'; fileName?: string; contentType?: string; base64?: string }[]> {
   const result: { key: string; value: string; type: 'text' | 'file'; fileName?: string; contentType?: string; base64?: string }[] = [];
   for (const entry of entries.filter(e => e.enabled && e.key)) {
     if (entry.valueType === 'file') {
-      const file = getFile(entry.id);
+      const file = getFile(requestId, entry.id);
       if (file) {
         const base64 = await fileToBase64(file);
         result.push({
@@ -184,7 +185,7 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
   let proxyBody: string;
   if (body instanceof FormData && request.body.type === 'form-data') {
     // Serialize form-data entries (including files as base64) for the proxy
-    const formDataEntries = await serializeFormDataEntries(request.body.formData);
+    const formDataEntries = await serializeFormDataEntries(request.id, request.body.formData);
     proxyBody = JSON.stringify({
       method: request.method,
       url: finalUrl,

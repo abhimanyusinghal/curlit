@@ -1,18 +1,23 @@
 // In-memory store for File objects associated with form-data entries.
-// Files are keyed by the FormDataEntry id and cannot be persisted across reloads.
+// Files are keyed by "requestId:entryId" to isolate duplicated tabs / saved requests.
+// Cannot be persisted across reloads.
 
 const files = new Map<string, File>();
 
-export function setFile(entryId: string, file: File): void {
-  files.set(entryId, file);
+function fileKey(requestId: string, entryId: string): string {
+  return `${requestId}:${entryId}`;
 }
 
-export function getFile(entryId: string): File | undefined {
-  return files.get(entryId);
+export function setFile(requestId: string, entryId: string, file: File): void {
+  files.set(fileKey(requestId, entryId), file);
 }
 
-export function removeFile(entryId: string): void {
-  files.delete(entryId);
+export function getFile(requestId: string, entryId: string): File | undefined {
+  return files.get(fileKey(requestId, entryId));
+}
+
+export function removeFile(requestId: string, entryId: string): void {
+  files.delete(fileKey(requestId, entryId));
 }
 
 export function fileToBase64(file: File): Promise<string> {

@@ -69,6 +69,7 @@ interface PostmanKV {
   disabled?: boolean;
   description?: string;
   type?: string;
+  src?: string;
 }
 
 interface PostmanAuth {
