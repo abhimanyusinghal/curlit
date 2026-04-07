@@ -361,7 +361,7 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
         const parsed = JSON.parse(dataBody);
         // Detect GraphQL requests: either a 'query' field with a GraphQL keyword,
         // or a persisted-query shape (operationName/extensions without query)
-        const hasGraphQLQuery = typeof parsed.query === 'string' && /^\s*(query|mutation|subscription|\{)/.test(parsed.query);
+        const hasGraphQLQuery = typeof parsed.query === 'string' && /^\s*(query|mutation|subscription|fragment|#|\{)/.test(parsed.query);
         const hasPersistedQuery = !parsed.query && (typeof parsed.operationName === 'string' || parsed.extensions);
         if (hasGraphQLQuery || hasPersistedQuery) {
           result.body = {
@@ -408,6 +408,16 @@ export function generateCurlCommand(request: RequestConfig): string {
   parts.push(`'${url}'`);
 
   const headers = buildHeaders(request.headers, request.auth);
+  // Auto-add Content-Type for body types that require it, matching sendRequest
+  if (!headers['Content-Type'] && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+    if (request.body.type === 'graphql' || request.body.type === 'json') {
+      headers['Content-Type'] = 'application/json';
+    } else if (request.body.type === 'xml') {
+      headers['Content-Type'] = 'application/xml';
+    } else if (request.body.type === 'x-www-form-urlencoded') {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
+  }
   Object.entries(headers).forEach(([key, value]) => {
     parts.push(`-H '${key}: ${value}'`);
   });

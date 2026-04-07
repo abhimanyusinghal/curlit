@@ -535,6 +535,22 @@ describe('parseCurlCommand', () => {
     const result = parseCurlCommand(`curl -H 'Referer: https://other.com' https://api.example.com/data`);
     expect(result.url).toBe('https://api.example.com/data');
   });
+
+  it('detects GraphQL query starting with fragment keyword', () => {
+    const result = parseCurlCommand(
+      `curl -X POST 'https://api.example.com/graphql' -d '{"query":"fragment UserFields on User { id name }\\nquery GetUser { user { ...UserFields } }"}'`
+    );
+    expect(result.body!.type).toBe('graphql');
+    expect(result.body!.graphql!.query).toContain('fragment UserFields');
+  });
+
+  it('detects GraphQL query starting with a comment', () => {
+    const result = parseCurlCommand(
+      `curl -X POST 'https://api.example.com/graphql' -d '{"query":"# fetch users\\nquery { users { id } }"}'`
+    );
+    expect(result.body!.type).toBe('graphql');
+    expect(result.body!.graphql!.query).toContain('# fetch users');
+  });
 });
 
 // ─── generateCurlCommand ────────────────────────────────────────────────────
@@ -611,6 +627,38 @@ describe('generateCurlCommand', () => {
     const parsed = JSON.parse(dMatch![1]);
     expect(parsed.query).toContain('query ($id: ID!)');
     expect(parsed.variables).toEqual({ id: '42' });
+  });
+
+  it('auto-adds Content-Type: application/json for GraphQL export', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      url: 'https://api.example.com/graphql',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: '{ users { id } }', variables: '' } },
+    });
+    const result = generateCurlCommand(req);
+    expect(result).toContain("-H 'Content-Type: application/json'");
+  });
+
+  it('auto-adds Content-Type: application/json for JSON export', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      url: 'https://example.com',
+      body: { type: 'json', raw: '{"a":1}', formData: [], urlencoded: [] },
+    });
+    const result = generateCurlCommand(req);
+    expect(result).toContain("-H 'Content-Type: application/json'");
+  });
+
+  it('does not override user-specified Content-Type in export', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      url: 'https://api.example.com/graphql',
+      headers: [kv('Content-Type', 'application/graphql+json')],
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: '{ users { id } }', variables: '' } },
+    });
+    const result = generateCurlCommand(req);
+    expect(result).toContain("-H 'Content-Type: application/graphql+json'");
+    expect(result).not.toContain("application/json");
   });
 });
 
