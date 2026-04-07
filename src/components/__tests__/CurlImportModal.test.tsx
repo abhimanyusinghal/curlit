@@ -35,4 +35,21 @@ describe('CurlImportModal', () => {
     expect(state.tabs).toHaveLength(2);
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('import GraphQL cURL creates tab with graphql body type', () => {
+    const onClose = vi.fn();
+    render(<CurlImportModal open={true} onClose={onClose} />);
+    const textarea = screen.getByPlaceholderText(/Paste your cURL command/);
+    const curlCmd = `curl -X POST 'https://api.example.com/graphql' -H 'Content-Type: application/json' -d '{"query":"{ users { id name } }"}'`;
+    fireEvent.change(textarea, { target: { value: curlCmd } });
+    fireEvent.click(screen.getByText('Import'));
+    const state = useAppStore.getState();
+    expect(state.tabs).toHaveLength(2);
+    const newTab = state.tabs[1];
+    const request = state.requests[newTab.requestId];
+    expect(request.body.type).toBe('graphql');
+    expect(request.body.graphql?.query).toBe('{ users { id name } }');
+    expect(request.url).toBe('https://api.example.com/graphql');
+    expect(request.method).toBe('POST');
+  });
 });

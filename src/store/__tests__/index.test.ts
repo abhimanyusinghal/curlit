@@ -100,6 +100,43 @@ describe('Request State', () => {
     useAppStore.getState().setLoading(tabId, false);
     expect(useAppStore.getState().loadingRequests[tabId]).toBe(false);
   });
+
+  it('addTab with GraphQL body preserves graphql fields', () => {
+    const id = useAppStore.getState().addTab({
+      method: 'POST',
+      url: 'https://api.example.com/graphql',
+      body: {
+        type: 'graphql',
+        raw: '',
+        formData: [],
+        urlencoded: [],
+        graphql: { query: '{ users { id } }', variables: '{"limit": 10}' },
+      },
+    });
+    const req = useAppStore.getState().requests[id];
+    expect(req.body.type).toBe('graphql');
+    expect(req.body.graphql?.query).toBe('{ users { id } }');
+    expect(req.body.graphql?.variables).toBe('{"limit": 10}');
+  });
+
+  it('updateRequest preserves graphql body when updating other fields', () => {
+    const tabId = useAppStore.getState().tabs[0].requestId;
+    useAppStore.getState().updateRequest(tabId, {
+      body: {
+        type: 'graphql',
+        raw: '',
+        formData: [],
+        urlencoded: [],
+        graphql: { query: '{ hello }', variables: '' },
+      },
+    });
+    // Update URL without touching body
+    useAppStore.getState().updateRequest(tabId, { url: 'https://api.test/graphql' });
+    const req = useAppStore.getState().requests[tabId];
+    expect(req.body.type).toBe('graphql');
+    expect(req.body.graphql?.query).toBe('{ hello }');
+    expect(req.url).toBe('https://api.test/graphql');
+  });
 });
 
 // ─── Collections ─────────────────────────────────────────────────────────────

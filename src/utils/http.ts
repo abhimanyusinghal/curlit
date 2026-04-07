@@ -46,6 +46,31 @@ export function buildBody(request: RequestConfig): string | FormData | File | nu
   switch (request.body.type) {
     case 'none':
       return null;
+    case 'graphql': {
+      const queryStr = request.body.graphql?.query ?? '';
+      const gql: Record<string, unknown> = {};
+      // Only include query when non-empty — persisted-query payloads omit it
+      if (queryStr) gql.query = queryStr;
+      const varsStr = request.body.graphql?.variables?.trim();
+      if (varsStr) {
+        try {
+          gql.variables = JSON.parse(varsStr);
+        } catch {
+          gql.variables = {};
+        }
+      }
+      if (request.body.graphql?.operationName) {
+        gql.operationName = request.body.graphql.operationName;
+      }
+      if (request.body.graphql?.extensions?.trim()) {
+        try {
+          gql.extensions = JSON.parse(request.body.graphql.extensions);
+        } catch {
+          // skip malformed extensions
+        }
+      }
+      return JSON.stringify(gql);
+    }
     case 'json':
     case 'text':
     case 'xml':
@@ -111,6 +136,14 @@ export function resolveRequestVariables(request: RequestConfig, variables: Recor
         key: resolveVariables(f.key, variables),
         value: resolveVariables(f.value, variables),
       })),
+      graphql: request.body.graphql ? {
+        query: resolveVariables(request.body.graphql.query, variables),
+        variables: resolveVariables(request.body.graphql.variables, variables),
+        operationName: request.body.graphql.operationName
+          ? resolveVariables(request.body.graphql.operationName, variables) : undefined,
+        extensions: request.body.graphql.extensions
+          ? resolveVariables(request.body.graphql.extensions, variables) : undefined,
+      } : undefined,
     },
     auth: resolveAuthVariables(request.auth, variables),
   };
@@ -168,7 +201,9 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
   const headers = buildHeaders(request.headers, request.auth);
   const body = buildBody(request);
 
-  if (request.body.type === 'json' && !headers['Content-Type']) {
+  if (request.body.type === 'graphql' && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  } else if (request.body.type === 'json' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   } else if (request.body.type === 'xml' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/xml';
@@ -261,17 +296,35 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
 
   const cleaned = curlStr.replace(/\\\n/g, ' ').replace(/\s+/g, ' ').trim();
 
-  // Extract URL
-  const urlMatch = cleaned.match(/curl\s+(?:['"]([^'"]+)['"]|(\S+))/i);
-  if (!urlMatch) {
-    const genericUrl = cleaned.match(/(?:https?:\/\/\S+)/);
-    if (genericUrl) result.url = genericUrl[0];
-  } else {
-    result.url = urlMatch[1] || urlMatch[2];
+  // Extract URL — tokenise the command and grab the first non-flag argument.
+  // This avoids picking up http(s) literals buried inside -d/-H values.
+  {
+    const flagsWithArg = new Set(['-X', '-H', '-d', '-u', '-o', '-A', '-e', '-b', '-c', '--request', '--data', '--data-raw', '--data-binary', '--data-urlencode', '--header', '--user', '--output', '--user-agent', '--referer', '--cookie', '--cookie-jar', '--max-time', '--connect-timeout', '--retry', '--proxy', '--cert', '--key', '--cacert']);
+    const args = cleaned.replace(/^curl\s+/i, '');
+    const tokens: string[] = [];
+    const tokenRegex = /'([^']*)'|"([^"]*)"|(\S+)/g;
+    let m;
+    while ((m = tokenRegex.exec(args)) !== null) {
+      tokens.push(m[1] ?? m[2] ?? m[3]);
+    }
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      // --url explicitly provides the target URL
+      if (t === '--url' && i + 1 < tokens.length) {
+        result.url = tokens[++i];
+        break;
+      }
+      if (t.startsWith('-')) {
+        if (flagsWithArg.has(t)) i++;
+        continue;
+      }
+      result.url = t;
+      break;
+    }
   }
 
-  // Extract method
-  const methodMatch = cleaned.match(/-X\s+(\w+)/i);
+  // Extract method (-X or --request)
+  const methodMatch = cleaned.match(/(?:-X|--request)\s+(\w+)/i);
   if (methodMatch) {
     result.method = methodMatch[1].toUpperCase() as RequestConfig['method'];
   }
@@ -305,14 +358,36 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
       binaryFile: { fileName, fileSize: 0, fileType: 'application/octet-stream' },
     };
   } else {
-    const dataMatch = cleaned.match(/(?:-d|--data|--data-raw|--data-binary)\s+['"]([^'"]*)['"]/i);
+    const dataMatch = cleaned.match(/(?:-d|--data|--data-raw|--data-binary)\s+(?:'([^']*)'|"([^"]*)")/i);
     if (dataMatch) {
+      const dataBody = dataMatch[1] ?? dataMatch[2];
       if (!methodMatch) result.method = 'POST';
       try {
-        JSON.parse(dataMatch[1]);
-        result.body = { type: 'json', raw: dataMatch[1], formData: [], urlencoded: [] };
+        const parsed = JSON.parse(dataBody);
+        // Detect GraphQL requests: either a 'query' field with a GraphQL keyword,
+        // or a persisted-query shape (operationName/extensions without query)
+        // Strip leading # comment lines before testing for GraphQL keywords
+        const strippedQuery = typeof parsed.query === 'string' ? parsed.query.replace(/^\s*(#[^\n]*\n\s*)*/,'') : '';
+        const hasGraphQLQuery = typeof parsed.query === 'string' && /^\s*(query[\s({]|mutation[\s({]|subscription[\s({]|fragment\s|\{)/.test(strippedQuery);
+        const hasPersistedQuery = !parsed.query && (typeof parsed.operationName === 'string' || parsed.extensions);
+        if (hasGraphQLQuery || hasPersistedQuery) {
+          result.body = {
+            type: 'graphql',
+            raw: '',
+            formData: [],
+            urlencoded: [],
+            graphql: {
+              query: parsed.query ?? '',
+              variables: parsed.variables ? JSON.stringify(parsed.variables, null, 2) : '',
+              operationName: parsed.operationName || undefined,
+              extensions: parsed.extensions ? JSON.stringify(parsed.extensions, null, 2) : undefined,
+            },
+          };
+        } else {
+          result.body = { type: 'json', raw: dataBody, formData: [], urlencoded: [] };
+        }
       } catch {
-        result.body = { type: 'text', raw: dataMatch[1], formData: [], urlencoded: [] };
+        result.body = { type: 'text', raw: dataBody, formData: [], urlencoded: [] };
       }
     }
   }
@@ -340,6 +415,16 @@ export function generateCurlCommand(request: RequestConfig): string {
   parts.push(`'${url}'`);
 
   const headers = buildHeaders(request.headers, request.auth);
+  // Auto-add Content-Type for body types that require it, matching sendRequest
+  if (!headers['Content-Type'] && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+    if (request.body.type === 'graphql' || request.body.type === 'json') {
+      headers['Content-Type'] = 'application/json';
+    } else if (request.body.type === 'xml') {
+      headers['Content-Type'] = 'application/xml';
+    } else if (request.body.type === 'x-www-form-urlencoded') {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
+  }
   Object.entries(headers).forEach(([key, value]) => {
     parts.push(`-H '${key}: ${value}'`);
   });
