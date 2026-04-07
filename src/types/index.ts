@@ -17,13 +17,37 @@ export interface FormDataEntry extends KeyValuePair {
 
 export type BodyType = 'none' | 'json' | 'text' | 'xml' | 'form-data' | 'x-www-form-urlencoded' | 'binary' | 'graphql';
 
-export type AuthType = 'none' | 'basic' | 'bearer' | 'api-key';
+export type AuthType = 'none' | 'basic' | 'bearer' | 'api-key' | 'oauth2';
+
+export type OAuth2GrantType = 'authorization_code' | 'client_credentials';
+
+export interface OAuth2Token {
+  accessToken: string;
+  tokenType?: string;
+  expiresIn?: number;
+  refreshToken?: string;
+  scope?: string;
+  obtainedAt?: number;
+}
+
+export interface OAuth2Config {
+  grantType: OAuth2GrantType;
+  authUrl: string;
+  tokenUrl: string;
+  clientId: string;
+  clientSecret: string;
+  scope: string;
+  callbackUrl: string;
+  state?: string;
+  token?: OAuth2Token;
+}
 
 export interface AuthConfig {
   type: AuthType;
   basic?: { username: string; password: string };
   bearer?: { token: string };
   apiKey?: { key: string; value: string; addTo: 'header' | 'query' };
+  oauth2?: OAuth2Config;
 }
 
 export interface RequestConfig {

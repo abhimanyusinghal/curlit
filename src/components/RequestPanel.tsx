@@ -4,13 +4,14 @@ import { json } from '@codemirror/lang-json';
 import { xml } from '@codemirror/lang-xml';
 import { html } from '@codemirror/lang-html';
 import { oneDark } from '@codemirror/theme-one-dark';
-import type { RequestConfig, BodyType, AuthType } from '../types';
+import type { RequestConfig, BodyType, AuthType, OAuth2GrantType } from '../types';
 import { useAppStore } from '../store';
 import type { Theme } from '../store';
 import { KeyValueEditor } from './KeyValueEditor';
 import { FormDataEditor } from './FormDataEditor';
 import { BinaryBodyEditor } from './BinaryBodyEditor';
 import { GraphQLEditor } from './GraphQLEditor';
+import { fetchOAuth2Token, buildAuthorizationUrl, isTokenExpired } from '../utils/oauth';
 
 type RequestTabType = 'params' | 'headers' | 'body' | 'auth';
 
@@ -210,11 +211,16 @@ function BodyEditor({ request }: { request: RequestConfig }) {
 function AuthEditor({ request }: { request: RequestConfig }) {
   const updateRequest = useAppStore(s => s.updateRequest);
 
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [authCode, setAuthCode] = useState('');
+
   const authTypes: { id: AuthType; label: string }[] = [
     { id: 'none', label: 'No Auth' },
     { id: 'basic', label: 'Basic Auth' },
     { id: 'bearer', label: 'Bearer Token' },
     { id: 'api-key', label: 'API Key' },
+    { id: 'oauth2', label: 'OAuth 2.0' },
   ];
 
   const updateAuth = (updates: Partial<RequestConfig['auth']>) => {
@@ -354,6 +360,246 @@ function AuthEditor({ request }: { request: RequestConfig }) {
           </label>
         </div>
       )}
+
+      {request.auth.type === 'oauth2' && (
+        <div className="flex flex-col gap-3 max-w-lg">
+          {/* Grant type selector */}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-dark-300 font-medium">Grant Type</span>
+            <select
+              value={request.auth.oauth2?.grantType || 'client_credentials'}
+              onChange={e =>
+                updateAuth({
+                  oauth2: {
+                    ...defaultOAuth2Config(),
+                    ...request.auth.oauth2,
+                    grantType: e.target.value as OAuth2GrantType,
+                  },
+                })
+              }
+              className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 cursor-pointer"
+            >
+              <option value="client_credentials">Client Credentials</option>
+              <option value="authorization_code">Authorization Code</option>
+            </select>
+          </label>
+
+          {/* Authorization URL (only for auth code flow) */}
+          {request.auth.oauth2?.grantType === 'authorization_code' && (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-dark-300 font-medium">Authorization URL</span>
+              <input
+                type="text"
+                value={request.auth.oauth2?.authUrl || ''}
+                onChange={e =>
+                  updateAuth({
+                    oauth2: { ...defaultOAuth2Config(), ...request.auth.oauth2, authUrl: e.target.value },
+                  })
+                }
+                className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 font-mono"
+                placeholder="https://provider.com/oauth/authorize"
+              />
+            </label>
+          )}
+
+          {/* Token URL */}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-dark-300 font-medium">Token URL</span>
+            <input
+              type="text"
+              value={request.auth.oauth2?.tokenUrl || ''}
+              onChange={e =>
+                updateAuth({
+                  oauth2: { ...defaultOAuth2Config(), ...request.auth.oauth2, tokenUrl: e.target.value },
+                })
+              }
+              className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 font-mono"
+              placeholder="https://provider.com/oauth/token"
+            />
+          </label>
+
+          {/* Client ID */}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-dark-300 font-medium">Client ID</span>
+            <input
+              type="text"
+              value={request.auth.oauth2?.clientId || ''}
+              onChange={e =>
+                updateAuth({
+                  oauth2: { ...defaultOAuth2Config(), ...request.auth.oauth2, clientId: e.target.value },
+                })
+              }
+              className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 font-mono"
+              placeholder="your-client-id"
+            />
+          </label>
+
+          {/* Client Secret */}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-dark-300 font-medium">Client Secret</span>
+            <input
+              type="password"
+              value={request.auth.oauth2?.clientSecret || ''}
+              onChange={e =>
+                updateAuth({
+                  oauth2: { ...defaultOAuth2Config(), ...request.auth.oauth2, clientSecret: e.target.value },
+                })
+              }
+              className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 font-mono"
+              placeholder="your-client-secret"
+            />
+          </label>
+
+          {/* Scope */}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-dark-300 font-medium">Scope</span>
+            <input
+              type="text"
+              value={request.auth.oauth2?.scope || ''}
+              onChange={e =>
+                updateAuth({
+                  oauth2: { ...defaultOAuth2Config(), ...request.auth.oauth2, scope: e.target.value },
+                })
+              }
+              className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 font-mono"
+              placeholder="read write (space-separated)"
+            />
+          </label>
+
+          {/* Callback URL (only for auth code flow) */}
+          {request.auth.oauth2?.grantType === 'authorization_code' && (
+            <>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-dark-300 font-medium">Callback URL</span>
+                <input
+                  type="text"
+                  value={request.auth.oauth2?.callbackUrl || ''}
+                  onChange={e =>
+                    updateAuth({
+                      oauth2: { ...defaultOAuth2Config(), ...request.auth.oauth2, callbackUrl: e.target.value },
+                    })
+                  }
+                  className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 font-mono"
+                  placeholder="https://localhost/callback"
+                />
+              </label>
+
+              {/* Get Authorization Code button */}
+              <button
+                onClick={() => {
+                  const cfg = { ...defaultOAuth2Config(), ...request.auth.oauth2 };
+                  const url = buildAuthorizationUrl(cfg);
+                  window.open(url, '_blank', 'width=600,height=700');
+                }}
+                disabled={!request.auth.oauth2?.authUrl || !request.auth.oauth2?.clientId}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-dark-600 text-dark-200 hover:bg-dark-500 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Get Authorization Code
+              </button>
+
+              {/* Authorization code input */}
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-dark-300 font-medium">Authorization Code</span>
+                <input
+                  type="text"
+                  value={authCode}
+                  onChange={e => setAuthCode(e.target.value)}
+                  className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 font-mono"
+                  placeholder="Paste the authorization code here"
+                />
+              </label>
+            </>
+          )}
+
+          {/* Token status */}
+          {request.auth.oauth2?.token?.accessToken && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-700 border border-dark-600">
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  request.auth.oauth2.token && isTokenExpired(request.auth.oauth2.token)
+                    ? 'bg-accent-red'
+                    : 'bg-accent-green'
+                }`}
+              />
+              <span className="text-xs text-dark-300">
+                {request.auth.oauth2.token && isTokenExpired(request.auth.oauth2.token)
+                  ? 'Token expired'
+                  : 'Token active'}
+              </span>
+              <span className="text-xs text-dark-400 font-mono ml-auto truncate max-w-[200px]">
+                {request.auth.oauth2.token.accessToken.substring(0, 20)}...
+              </span>
+            </div>
+          )}
+
+          {/* Error display */}
+          {tokenError && (
+            <div className="px-3 py-2 rounded-lg bg-accent-red/10 border border-accent-red/30 text-accent-red text-xs">
+              {tokenError}
+            </div>
+          )}
+
+          {/* Get Token / Refresh Token button */}
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                setTokenError(null);
+                setTokenLoading(true);
+                try {
+                  const cfg = { ...defaultOAuth2Config(), ...request.auth.oauth2 };
+                  const token = await fetchOAuth2Token(
+                    cfg,
+                    cfg.grantType === 'authorization_code' ? authCode : undefined,
+                  );
+                  updateAuth({ oauth2: { ...cfg, token } });
+                  setAuthCode('');
+                } catch (err) {
+                  setTokenError(err instanceof Error ? err.message : 'Failed to fetch token');
+                } finally {
+                  setTokenLoading(false);
+                }
+              }}
+              disabled={
+                tokenLoading ||
+                !request.auth.oauth2?.tokenUrl ||
+                !request.auth.oauth2?.clientId ||
+                (request.auth.oauth2?.grantType === 'authorization_code' && !authCode)
+              }
+              className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-accent-blue text-white hover:bg-accent-blue/80 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            >
+              {tokenLoading
+                ? 'Requesting...'
+                : request.auth.oauth2?.token?.accessToken
+                  ? 'Refresh Token'
+                  : 'Get Token'}
+            </button>
+            {request.auth.oauth2?.token?.accessToken && (
+              <button
+                onClick={() =>
+                  updateAuth({
+                    oauth2: { ...defaultOAuth2Config(), ...request.auth.oauth2, token: undefined },
+                  })
+                }
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-dark-600 text-dark-200 hover:bg-dark-500 cursor-pointer transition-colors"
+              >
+                Clear Token
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function defaultOAuth2Config(): import('../types').OAuth2Config {
+  return {
+    grantType: 'client_credentials',
+    authUrl: '',
+    tokenUrl: '',
+    clientId: '',
+    clientSecret: '',
+    scope: '',
+    callbackUrl: '',
+  };
 }

@@ -1230,7 +1230,11 @@ describe('parseOpenApiSpec - authentication', () => {
       security: [{ OAuth: ['read'] }],
     });
 
-    expect(result.requests[0].auth.type).toBe('bearer');
+    expect(result.requests[0].auth.type).toBe('oauth2');
+    expect(result.requests[0].auth.oauth2?.grantType).toBe('authorization_code');
+    expect(result.requests[0].auth.oauth2?.authUrl).toBe('https://auth.example.com/authorize');
+    expect(result.requests[0].auth.oauth2?.tokenUrl).toBe('https://auth.example.com/token');
+    expect(result.requests[0].auth.oauth2?.scope).toBe('read');
   });
 
   it('operation-level security overrides global', () => {

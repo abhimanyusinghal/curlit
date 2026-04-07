@@ -33,6 +33,13 @@ export function buildHeaders(headers: KeyValuePair[], auth: AuthConfig): Record<
         result[auth.apiKey.key] = auth.apiKey.value;
       }
       break;
+    case 'oauth2':
+      if (auth.oauth2?.token?.accessToken) {
+        const tokenType = auth.oauth2.token.tokenType || 'Bearer';
+        const prefix = tokenType.charAt(0).toUpperCase() + tokenType.slice(1).toLowerCase();
+        result['Authorization'] = `${prefix} ${auth.oauth2.token.accessToken}`;
+      }
+      break;
   }
 
   return result;
@@ -165,6 +172,17 @@ function resolveAuthVariables(auth: AuthConfig, variables: Record<string, string
       ...resolved.apiKey,
       key: resolveVariables(resolved.apiKey.key, variables),
       value: resolveVariables(resolved.apiKey.value, variables),
+    };
+  }
+  if (resolved.oauth2) {
+    resolved.oauth2 = {
+      ...resolved.oauth2,
+      authUrl: resolveVariables(resolved.oauth2.authUrl, variables),
+      tokenUrl: resolveVariables(resolved.oauth2.tokenUrl, variables),
+      clientId: resolveVariables(resolved.oauth2.clientId, variables),
+      clientSecret: resolveVariables(resolved.oauth2.clientSecret, variables),
+      scope: resolveVariables(resolved.oauth2.scope, variables),
+      callbackUrl: resolveVariables(resolved.oauth2.callbackUrl, variables),
     };
   }
   return resolved;

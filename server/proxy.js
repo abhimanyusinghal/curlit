@@ -158,6 +158,58 @@ app.post('/api/proxy', async (req, res) => {
   }
 });
 
+/**
+ * OAuth 2.0 token exchange endpoint.
+ * Handles both authorization_code and client_credentials grant types.
+ */
+app.post('/api/oauth/token', async (req, res) => {
+  const { tokenUrl, grantType, clientId, clientSecret, code, redirectUri, scope } = req.body;
+
+  if (!tokenUrl) {
+    return res.status(400).json({ error: 'Token URL is required' });
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.append('grant_type', grantType);
+    params.append('client_id', clientId || '');
+
+    if (clientSecret) {
+      params.append('client_secret', clientSecret);
+    }
+
+    if (grantType === 'authorization_code') {
+      if (code) params.append('code', code);
+      if (redirectUri) params.append('redirect_uri', redirectUri);
+    }
+
+    if (scope) {
+      params.append('scope', scope);
+    }
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: 'Invalid response from token endpoint', raw: text };
+    }
+
+    res.status(response.status).json(data);
+  } catch (error) {
+    const cause = error.cause || error;
+    res.status(500).json({
+      error: cause.message || error.message || 'Token exchange failed',
+    });
+  }
+});
+
 // Export app for testing
 export { app };
 
