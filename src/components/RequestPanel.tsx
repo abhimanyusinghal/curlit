@@ -9,6 +9,7 @@ import { useAppStore } from '../store';
 import type { Theme } from '../store';
 import { KeyValueEditor } from './KeyValueEditor';
 import { FormDataEditor } from './FormDataEditor';
+import { BinaryBodyEditor } from './BinaryBodyEditor';
 
 type RequestTabType = 'params' | 'headers' | 'body' | 'auth';
 
@@ -95,6 +96,7 @@ function BodyEditor({ request }: { request: RequestConfig }) {
     { id: 'xml', label: 'XML' },
     { id: 'form-data', label: 'Form Data' },
     { id: 'x-www-form-urlencoded', label: 'URL Encoded' },
+    { id: 'binary', label: 'Binary' },
   ];
 
   const updateBody = (updates: Partial<RequestConfig['body']>) => {
@@ -170,6 +172,14 @@ function BodyEditor({ request }: { request: RequestConfig }) {
           onChange={urlencoded => updateBody({ urlencoded })}
           keyPlaceholder="Key"
           valuePlaceholder="Value"
+        />
+      )}
+
+      {request.body.type === 'binary' && (
+        <BinaryBodyEditor
+          requestId={request.id}
+          binaryFile={request.body.binaryFile}
+          onChange={binaryFile => updateBody({ binaryFile })}
         />
       )}
     </div>

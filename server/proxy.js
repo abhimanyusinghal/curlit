@@ -45,7 +45,7 @@ function buildMultipartBody(entries) {
 }
 
 app.post('/api/proxy', async (req, res) => {
-  const { method, url, headers, body, bodyType, formDataEntries } = req.body;
+  const { method, url, headers, body, bodyType, formDataEntries, binary } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: 'URL is required' });
@@ -59,7 +59,12 @@ app.post('/api/proxy', async (req, res) => {
 
     // Set body for methods that support it
     if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-      if (bodyType === 'form-data' && Array.isArray(formDataEntries)) {
+      if (bodyType === 'binary' && binary?.base64) {
+        fetchOptions.body = Buffer.from(binary.base64, 'base64');
+        if (!fetchOptions.headers['Content-Type']) {
+          fetchOptions.headers['Content-Type'] = binary.fileType || 'application/octet-stream';
+        }
+      } else if (bodyType === 'form-data' && Array.isArray(formDataEntries)) {
         // Build proper multipart/form-data manually (reliable across Node versions)
         const { buffer, contentType } = buildMultipartBody(formDataEntries);
         fetchOptions.body = buffer;

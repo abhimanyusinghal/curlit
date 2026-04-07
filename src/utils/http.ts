@@ -38,7 +38,9 @@ export function buildHeaders(headers: KeyValuePair[], auth: AuthConfig): Record<
   return result;
 }
 
-export function buildBody(request: RequestConfig): string | FormData | null {
+const BINARY_ENTRY_ID = '__binary__';
+
+export function buildBody(request: RequestConfig): string | FormData | File | null {
   if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return null;
 
   switch (request.body.type) {
@@ -66,6 +68,10 @@ export function buildBody(request: RequestConfig): string | FormData | null {
         params.append(f.key, f.value);
       });
       return params.toString();
+    }
+    case 'binary': {
+      const file = getFile(request.id, BINARY_ENTRY_ID);
+      return file ?? null;
     }
     default:
       return null;
@@ -168,6 +174,9 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
     headers['Content-Type'] = 'application/xml';
   } else if (request.body.type === 'x-www-form-urlencoded' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  } else if (request.body.type === 'binary' && !headers['Content-Type']) {
+    const file = getFile(request.id, BINARY_ENTRY_ID);
+    headers['Content-Type'] = file?.type || 'application/octet-stream';
   }
 
   // Add api-key to query params if configured
@@ -193,6 +202,25 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
       bodyType: 'form-data',
       formDataEntries,
     });
+  } else if (request.body.type === 'binary') {
+    const file = getFile(request.id, BINARY_ENTRY_ID);
+    if (file) {
+      const base64 = await fileToBase64(file);
+      proxyBody = JSON.stringify({
+        method: request.method,
+        url: finalUrl,
+        headers,
+        bodyType: 'binary',
+        binary: { base64, fileName: file.name, fileType: file.type || 'application/octet-stream' },
+      });
+    } else {
+      proxyBody = JSON.stringify({
+        method: request.method,
+        url: finalUrl,
+        headers,
+        bodyType: 'binary',
+      });
+    }
   } else {
     proxyBody = JSON.stringify({
       method: request.method,
@@ -305,9 +333,13 @@ export function generateCurlCommand(request: RequestConfig): string {
   });
 
   if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.body.type !== 'none') {
-    const body = buildBody(request);
-    if (body && typeof body === 'string') {
-      parts.push(`-d '${body}'`);
+    if (request.body.type === 'binary' && request.body.binaryFile) {
+      parts.push(`--data-binary '@${request.body.binaryFile.fileName}'`);
+    } else {
+      const body = buildBody(request);
+      if (body && typeof body === 'string') {
+        parts.push(`-d '${body}'`);
+      }
     }
   }
 
