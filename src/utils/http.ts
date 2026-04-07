@@ -291,15 +291,29 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
     }
   }
 
-  // Extract data/body
-  const dataMatch = cleaned.match(/(?:-d|--data|--data-raw|--data-binary)\s+['"]([^'"]*)['"]/i);
-  if (dataMatch) {
+  // Extract data/body — check --data-binary '@file' first
+  const binaryFileMatch = cleaned.match(/--data-binary\s+['"]@([^'"]+)['"]/i);
+  if (binaryFileMatch) {
     if (!methodMatch) result.method = 'POST';
-    try {
-      JSON.parse(dataMatch[1]);
-      result.body = { type: 'json', raw: dataMatch[1], formData: [], urlencoded: [] };
-    } catch {
-      result.body = { type: 'text', raw: dataMatch[1], formData: [], urlencoded: [] };
+    const filePath = binaryFileMatch[1];
+    const fileName = filePath.split('/').pop() || filePath;
+    result.body = {
+      type: 'binary',
+      raw: '',
+      formData: [],
+      urlencoded: [],
+      binaryFile: { fileName, fileSize: 0, fileType: 'application/octet-stream' },
+    };
+  } else {
+    const dataMatch = cleaned.match(/(?:-d|--data|--data-raw|--data-binary)\s+['"]([^'"]*)['"]/i);
+    if (dataMatch) {
+      if (!methodMatch) result.method = 'POST';
+      try {
+        JSON.parse(dataMatch[1]);
+        result.body = { type: 'json', raw: dataMatch[1], formData: [], urlencoded: [] };
+      } catch {
+        result.body = { type: 'text', raw: dataMatch[1], formData: [], urlencoded: [] };
+      }
     }
   }
 
