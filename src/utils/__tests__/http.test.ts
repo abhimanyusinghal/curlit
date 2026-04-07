@@ -14,12 +14,17 @@ import {
   formatTime,
   tryFormatJson,
 } from '../http';
-import { createDefaultRequest, createKeyValuePair } from '../../types';
-import type { KeyValuePair, AuthConfig } from '../../types';
+import { createDefaultRequest, createKeyValuePair, createFormDataEntry } from '../../types';
+import type { KeyValuePair, FormDataEntry, AuthConfig } from '../../types';
 
 // Helper to create enabled key-value pairs
 function kv(key: string, value: string, enabled = true): KeyValuePair {
   return createKeyValuePair({ key, value, enabled });
+}
+
+// Helper to create form-data entries (text type by default)
+function fd(key: string, value: string, enabled = true): FormDataEntry {
+  return createFormDataEntry({ key, value, enabled, valueType: 'text' });
 }
 
 // ─── buildUrl ────────────────────────────────────────────────────────────────
@@ -135,7 +140,7 @@ describe('buildBody', () => {
   it('returns FormData for form-data body with enabled fields', () => {
     const req = createDefaultRequest({
       method: 'POST',
-      body: { type: 'form-data', raw: '', formData: [kv('file', 'data'), kv('skip', 'no', false)], urlencoded: [] },
+      body: { type: 'form-data', raw: '', formData: [fd('file', 'data'), fd('skip', 'no', false)], urlencoded: [] },
     });
     const result = buildBody(req);
     expect(result).toBeInstanceOf(FormData);
@@ -186,7 +191,7 @@ describe('resolveRequestVariables', () => {
       body: {
         type: 'json',
         raw: '{"host":"{{host}}"}',
-        formData: [kv('field', '{{token}}')],
+        formData: [fd('field', '{{token}}')],
         urlencoded: [kv('u', '{{user}}')],
       },
     });

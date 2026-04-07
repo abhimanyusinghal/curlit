@@ -8,6 +8,7 @@ import type { RequestConfig, BodyType, AuthType } from '../types';
 import { useAppStore } from '../store';
 import type { Theme } from '../store';
 import { KeyValueEditor } from './KeyValueEditor';
+import { FormDataEditor } from './FormDataEditor';
 
 type RequestTabType = 'params' | 'headers' | 'body' | 'auth';
 
@@ -156,11 +157,10 @@ function BodyEditor({ request }: { request: RequestConfig }) {
       )}
 
       {request.body.type === 'form-data' && (
-        <KeyValueEditor
-          pairs={request.body.formData}
+        <FormDataEditor
+          requestId={request.id}
+          entries={request.body.formData}
           onChange={formData => updateBody({ formData })}
-          keyPlaceholder="Key"
-          valuePlaceholder="Value"
         />
       )}
 

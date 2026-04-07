@@ -1,6 +1,6 @@
 import yaml from 'js-yaml';
-import type { RequestConfig, KeyValuePair, AuthConfig, BodyType, HttpMethod } from '../types';
-import { createDefaultRequest, createKeyValuePair } from '../types';
+import type { RequestConfig, KeyValuePair, AuthConfig, BodyType, HttpMethod, FormDataEntry } from '../types';
+import { createDefaultRequest, createKeyValuePair, createFormDataEntry } from '../types';
 
 // ─── OpenAPI / Swagger Types ────────────────────────────────────────────────
 
@@ -747,14 +747,13 @@ function extractBody(
         body: {
           type: 'form-data',
           raw: '',
-          formData: formParams
-            .filter(p => p.type !== 'file')
-            .map(p =>
-              createKeyValuePair({
+          formData: formParams.map(p =>
+              createFormDataEntry({
                 key: p.name,
-                value: getParamExample(spec, p),
+                value: p.type === 'file' ? '' : getParamExample(spec, p),
                 enabled: true,
                 description: p.description,
+                valueType: p.type === 'file' ? 'file' : 'text',
               })
             ),
           urlencoded: [],
@@ -809,8 +808,7 @@ function convertRequestBody(spec: OpenApiSpec, requestBody: RequestBody): BodyRe
     const media = content[matchedKey];
 
     if (bodyType === 'form-data') {
-      const pairs = schemaToKeyValuePairs(spec, media.schema);
-      return { body: { type: 'form-data', raw: '', formData: pairs, urlencoded: [] }, contentType: matchedKey };
+      return { body: { type: 'form-data', raw: '', formData: schemaToFormDataEntries(spec, media.schema), urlencoded: [] }, contentType: matchedKey };
     }
     if (bodyType === 'x-www-form-urlencoded') {
       const pairs = schemaToKeyValuePairs(spec, media.schema);
@@ -835,7 +833,7 @@ function convertRequestBody(spec: OpenApiSpec, requestBody: RequestBody): BodyRe
     const bodyType = contentTypeToBodyType(firstKey);
     const media = content[firstKey];
     if (bodyType === 'form-data') {
-      return { body: { type: 'form-data', raw: '', formData: schemaToKeyValuePairs(spec, media.schema), urlencoded: [] }, contentType: firstKey };
+      return { body: { type: 'form-data', raw: '', formData: schemaToFormDataEntries(spec, media.schema), urlencoded: [] }, contentType: firstKey };
     }
     if (bodyType === 'x-www-form-urlencoded') {
       return { body: { type: 'x-www-form-urlencoded', raw: '', formData: [], urlencoded: schemaToKeyValuePairs(spec, media.schema) }, contentType: firstKey };
@@ -876,6 +874,32 @@ function getMediaExample(spec: OpenApiSpec, media: MediaType): unknown {
     return generateSchemaExample(spec, media.schema, new Set());
   }
   return '';
+}
+
+function schemaToFormDataEntries(spec: OpenApiSpec, schema?: SchemaObject): FormDataEntry[] {
+  if (!schema) return [];
+  const resolved = resolveSchemaRef(spec, schema);
+  const merged = mergeAllOfSchema(spec, resolved);
+  if (!merged.properties) return [];
+
+  const required = merged.required || [];
+  return Object.entries(merged.properties)
+    .filter(([, prop]) => {
+      const rp = resolveSchemaRef(spec, prop);
+      return !rp.readOnly;
+    })
+    .map(([key, prop]) => {
+      const resolvedProp = resolveSchemaRef(spec, prop);
+      const propType = resolveSchemaType(resolvedProp);
+      const isBinary = propType === 'string' && resolvedProp.format === 'binary';
+      const example = isBinary ? undefined : generateSchemaExample(spec, resolvedProp, new Set());
+      return createFormDataEntry({
+        key,
+        value: (!isBinary && example !== undefined) ? String(example) : '',
+        enabled: required.includes(key),
+        valueType: isBinary ? 'file' : 'text',
+      });
+    });
 }
 
 function schemaToKeyValuePairs(spec: OpenApiSpec, schema?: SchemaObject): KeyValuePair[] {

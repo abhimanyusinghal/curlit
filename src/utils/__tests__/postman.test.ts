@@ -277,7 +277,7 @@ describe('parsePostmanCollection: body', () => {
     expect(requests[0].body.urlencoded[1].enabled).toBe(false);
   });
 
-  it('converts formdata body and skips file entries', () => {
+  it('converts formdata body including file entries', () => {
     const col = postmanCollection({
       item: [{
         name: 'Test',
@@ -296,8 +296,12 @@ describe('parsePostmanCollection: body', () => {
     });
     const { requests } = parsePostmanCollection(col as any);
     expect(requests[0].body.type).toBe('form-data');
-    expect(requests[0].body.formData).toHaveLength(1); // file entry skipped
+    expect(requests[0].body.formData).toHaveLength(2);
     expect(requests[0].body.formData[0].key).toBe('name');
+    expect(requests[0].body.formData[0].valueType).toBe('text');
+    expect(requests[0].body.formData[1].key).toBe('avatar');
+    expect(requests[0].body.formData[1].valueType).toBe('file');
+    expect(requests[0].body.formData[1].fileName).toBe('/path/to/file');
   });
 
   it('returns none body when body is missing', () => {

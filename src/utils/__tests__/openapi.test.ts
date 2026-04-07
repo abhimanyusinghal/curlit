@@ -842,9 +842,83 @@ describe('parseOpenApiSpec - request body', () => {
     });
 
     expect(result.requests[0].body.type).toBe('form-data');
-    // file type is filtered out
-    expect(result.requests[0].body.formData).toHaveLength(1);
-    expect(result.requests[0].body.formData[0].key).toBe('name');
+    expect(result.requests[0].body.formData).toHaveLength(2);
+    expect(result.requests[0].body.formData[0].key).toBe('file');
+    expect(result.requests[0].body.formData[0].valueType).toBe('file');
+    expect(result.requests[0].body.formData[1].key).toBe('name');
+    expect(result.requests[0].body.formData[1].valueType).toBe('text');
+  });
+
+  it('detects binary fields in OAS3 multipart/form-data as file entries', () => {
+    const result = parseOpenApiSpec({
+      openapi: '3.0.0',
+      info: { title: 'API', version: '1.0' },
+      paths: {
+        '/upload': {
+          post: {
+            requestBody: {
+              content: {
+                'multipart/form-data': {
+                  schema: {
+                    type: 'object',
+                    required: ['file'],
+                    properties: {
+                      file: { type: 'string', format: 'binary' },
+                      thumbnail: { type: 'string', format: 'byte' },
+                      description: { type: 'string', example: 'My file' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.requests[0].body.type).toBe('form-data');
+    expect(result.requests[0].body.formData).toHaveLength(3);
+    expect(result.requests[0].body.formData[0].key).toBe('file');
+    expect(result.requests[0].body.formData[0].valueType).toBe('file');
+    expect(result.requests[0].body.formData[0].value).toBe('');
+    // format: byte is base64-encoded text, not a file upload
+    expect(result.requests[0].body.formData[1].key).toBe('thumbnail');
+    expect(result.requests[0].body.formData[1].valueType).toBe('text');
+    expect(result.requests[0].body.formData[2].key).toBe('description');
+    expect(result.requests[0].body.formData[2].valueType).toBe('text');
+    expect(result.requests[0].body.formData[2].value).toBe('My file');
+  });
+
+  it('detects OAS 3.1 nullable binary fields (type array) as file entries', () => {
+    const result = parseOpenApiSpec({
+      openapi: '3.1.0',
+      info: { title: 'API', version: '1.0' },
+      paths: {
+        '/upload': {
+          post: {
+            requestBody: {
+              content: {
+                'multipart/form-data': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      avatar: { type: ['string', 'null'], format: 'binary' },
+                      name: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.requests[0].body.formData).toHaveLength(2);
+    expect(result.requests[0].body.formData[0].key).toBe('avatar');
+    expect(result.requests[0].body.formData[0].valueType).toBe('file');
+    expect(result.requests[0].body.formData[1].key).toBe('name');
+    expect(result.requests[0].body.formData[1].valueType).toBe('text');
   });
 
   it('skips readOnly properties in body', () => {

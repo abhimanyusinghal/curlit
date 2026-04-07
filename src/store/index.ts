@@ -9,6 +9,7 @@ import type {
   HttpMethod,
 } from '../types';
 import { createDefaultRequest } from '../types';
+import { removeFilesForRequest } from '../utils/fileStore';
 
 const STORAGE_KEYS = {
   collections: 'curlit_collections',
@@ -184,6 +185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newResponses = { ...state.responses };
       const tab = state.tabs.find(t => t.id === tabId);
       if (tab) {
+        removeFilesForRequest(tab.requestId);
         delete newRequests[tab.requestId];
         delete newResponses[tab.requestId];
       }

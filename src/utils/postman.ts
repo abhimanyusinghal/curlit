@@ -1,5 +1,5 @@
 import type { RequestConfig, KeyValuePair, AuthConfig, BodyType, HttpMethod } from '../types';
-import { createDefaultRequest, createKeyValuePair } from '../types';
+import { createDefaultRequest, createKeyValuePair, createFormDataEntry } from '../types';
 
 // ─── Postman v2.1 Types ─────────────────────────────────────────────────────
 
@@ -69,6 +69,7 @@ interface PostmanKV {
   disabled?: boolean;
   description?: string;
   type?: string;
+  src?: string;
 }
 
 interface PostmanAuth {
@@ -238,14 +239,14 @@ function convertBody(body?: PostmanBody): RequestConfig['body'] {
       return {
         type: 'form-data',
         raw: '',
-        formData: (body.formdata || [])
-          .filter(f => f.type !== 'file') // skip file entries — not supported yet
-          .map(f =>
-            createKeyValuePair({
+        formData: (body.formdata || []).map(f =>
+            createFormDataEntry({
               key: f.key,
-              value: f.value || '',
+              value: f.type === 'file' ? '' : (f.value || ''),
               enabled: !f.disabled,
               description: f.description,
+              valueType: f.type === 'file' ? 'file' : 'text',
+              fileName: f.type === 'file' ? (f.src || '') : undefined,
             })
           ),
         urlencoded: [],

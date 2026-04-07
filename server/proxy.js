@@ -1,14 +1,51 @@
 import express from 'express';
 import cors from 'cors';
+import crypto from 'crypto';
 
 const app = express();
 const PORT = 3001;
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+
+/**
+ * Build a multipart/form-data body manually (avoids Node.js FormData + fetch quirks).
+ * Returns { buffer, contentType } with the correct boundary.
+ */
+function buildMultipartBody(entries) {
+  const boundary = `----CurlItBoundary${crypto.randomUUID().replace(/-/g, '')}`;
+  const parts = [];
+
+  for (const entry of entries) {
+    if (entry.type === 'file' && entry.base64 != null) {
+      const fileBuffer = Buffer.from(entry.base64, 'base64');
+      const fileName = entry.fileName || 'file';
+      const contentType = entry.contentType || 'application/octet-stream';
+      parts.push(
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${entry.key}"; filename="${fileName}"\r\nContent-Type: ${contentType}\r\n\r\n`,
+        ),
+        fileBuffer,
+        Buffer.from('\r\n'),
+      );
+    } else {
+      parts.push(
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${entry.key}"\r\n\r\n${entry.value}\r\n`,
+        ),
+      );
+    }
+  }
+
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+  return {
+    buffer: Buffer.concat(parts),
+    contentType: `multipart/form-data; boundary=${boundary}`,
+  };
+}
 
 app.post('/api/proxy', async (req, res) => {
-  const { method, url, headers, body, bodyType } = req.body;
+  const { method, url, headers, body, bodyType, formDataEntries } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: 'URL is required' });
@@ -21,8 +58,14 @@ app.post('/api/proxy', async (req, res) => {
     };
 
     // Set body for methods that support it
-    if (body && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-      if (bodyType === 'form-data' && typeof body === 'object') {
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+      if (bodyType === 'form-data' && Array.isArray(formDataEntries)) {
+        // Build proper multipart/form-data manually (reliable across Node versions)
+        const { buffer, contentType } = buildMultipartBody(formDataEntries);
+        fetchOptions.body = buffer;
+        fetchOptions.headers['Content-Type'] = contentType;
+      } else if (bodyType === 'form-data' && typeof body === 'object') {
+        // Legacy: text-only form-data sent as plain object
         const formBody = new URLSearchParams();
         Object.entries(body).forEach(([key, value]) => {
           formBody.append(key, String(value));
@@ -31,9 +74,9 @@ app.post('/api/proxy', async (req, res) => {
         if (!fetchOptions.headers['Content-Type']) {
           fetchOptions.headers['Content-Type'] = 'application/x-www-form-urlencoded';
         }
-      } else if (typeof body === 'string') {
+      } else if (body && typeof body === 'string') {
         fetchOptions.body = body;
-      } else {
+      } else if (body) {
         fetchOptions.body = JSON.stringify(body);
       }
     }

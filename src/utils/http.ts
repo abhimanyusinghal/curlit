@@ -1,4 +1,5 @@
-import type { RequestConfig, ResponseData, KeyValuePair, AuthConfig } from '../types';
+import type { RequestConfig, ResponseData, KeyValuePair, AuthConfig, FormDataEntry } from '../types';
+import { getFile, fileToBase64 } from './fileStore';
 
 export function buildUrl(baseUrl: string, params: KeyValuePair[]): string {
   const enabledParams = params.filter(p => p.enabled && p.key);
@@ -50,7 +51,12 @@ export function buildBody(request: RequestConfig): string | FormData | null {
     case 'form-data': {
       const formData = new FormData();
       request.body.formData.filter(f => f.enabled && f.key).forEach(f => {
-        formData.append(f.key, f.value);
+        if (f.valueType === 'file') {
+          const file = getFile(request.id, f.id);
+          if (file) formData.append(f.key, file, file.name);
+        } else {
+          formData.append(f.key, f.value);
+        }
       });
       return formData;
     }
@@ -92,7 +98,7 @@ export function resolveRequestVariables(request: RequestConfig, variables: Recor
       formData: request.body.formData.map(f => ({
         ...f,
         key: resolveVariables(f.key, variables),
-        value: resolveVariables(f.value, variables),
+        value: f.valueType === 'file' ? f.value : resolveVariables(f.value, variables),
       })),
       urlencoded: request.body.urlencoded.map(f => ({
         ...f,
@@ -125,6 +131,32 @@ function resolveAuthVariables(auth: AuthConfig, variables: Record<string, string
   return resolved;
 }
 
+async function serializeFormDataEntries(
+  requestId: string,
+  entries: FormDataEntry[],
+): Promise<{ key: string; value: string; type: 'text' | 'file'; fileName?: string; contentType?: string; base64?: string }[]> {
+  const result: { key: string; value: string; type: 'text' | 'file'; fileName?: string; contentType?: string; base64?: string }[] = [];
+  for (const entry of entries.filter(e => e.enabled && e.key)) {
+    if (entry.valueType === 'file') {
+      const file = getFile(requestId, entry.id);
+      if (file) {
+        const base64 = await fileToBase64(file);
+        result.push({
+          key: entry.key,
+          value: '',
+          type: 'file',
+          fileName: file.name,
+          contentType: file.type || 'application/octet-stream',
+          base64,
+        });
+      }
+    } else {
+      result.push({ key: entry.key, value: entry.value, type: 'text' });
+    }
+  }
+  return result;
+}
+
 export async function sendRequest(request: RequestConfig): Promise<ResponseData> {
   const url = buildUrl(request.url, request.params);
   const headers = buildHeaders(request.headers, request.auth);
@@ -150,16 +182,31 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
   const proxyUrl = '/api/proxy';
   const startTime = performance.now();
 
-  const response = await fetch(proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  let proxyBody: string;
+  if (body instanceof FormData && request.body.type === 'form-data') {
+    // Serialize form-data entries (including files as base64) for the proxy
+    const formDataEntries = await serializeFormDataEntries(request.id, request.body.formData);
+    proxyBody = JSON.stringify({
+      method: request.method,
+      url: finalUrl,
+      headers,
+      bodyType: 'form-data',
+      formDataEntries,
+    });
+  } else {
+    proxyBody = JSON.stringify({
       method: request.method,
       url: finalUrl,
       headers,
       body: body instanceof FormData ? Object.fromEntries(body) : body,
       bodyType: request.body.type,
-    }),
+    });
+  }
+
+  const response = await fetch(proxyUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: proxyBody,
   });
 
   const elapsed = performance.now() - startTime;

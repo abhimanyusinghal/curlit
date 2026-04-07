@@ -8,6 +8,13 @@ export interface KeyValuePair {
   description?: string;
 }
 
+export interface FormDataEntry extends KeyValuePair {
+  valueType: 'text' | 'file';
+  fileName?: string;
+  fileSize?: number;
+  fileType?: string;
+}
+
 export type BodyType = 'none' | 'json' | 'text' | 'xml' | 'form-data' | 'x-www-form-urlencoded';
 
 export type AuthType = 'none' | 'basic' | 'bearer' | 'api-key';
@@ -29,7 +36,7 @@ export interface RequestConfig {
   body: {
     type: BodyType;
     raw: string;
-    formData: KeyValuePair[];
+    formData: FormDataEntry[];
     urlencoded: KeyValuePair[];
   };
   auth: AuthConfig;
@@ -103,6 +110,17 @@ export function createKeyValuePair(overrides?: Partial<KeyValuePair>): KeyValueP
     key: '',
     value: '',
     enabled: true,
+    ...overrides,
+  };
+}
+
+export function createFormDataEntry(overrides?: Partial<FormDataEntry>): FormDataEntry {
+  return {
+    id: crypto.randomUUID(),
+    key: '',
+    value: '',
+    enabled: true,
+    valueType: 'text',
     ...overrides,
   };
 }
