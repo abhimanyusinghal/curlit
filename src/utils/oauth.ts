@@ -51,8 +51,11 @@ export function buildAuthorizationUrl(config: OAuth2Config): string {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: config.clientId,
-    redirect_uri: config.callbackUrl,
   });
+
+  if (config.callbackUrl) {
+    params.set('redirect_uri', config.callbackUrl);
+  }
 
   if (config.scope) {
     params.set('scope', config.scope);

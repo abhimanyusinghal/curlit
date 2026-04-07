@@ -12,6 +12,7 @@ import { FormDataEditor } from './FormDataEditor';
 import { BinaryBodyEditor } from './BinaryBodyEditor';
 import { GraphQLEditor } from './GraphQLEditor';
 import { fetchOAuth2Token, buildAuthorizationUrl, isTokenExpired } from '../utils/oauth';
+import { resolveVariables } from '../utils/http';
 
 type RequestTabType = 'params' | 'headers' | 'body' | 'auth';
 
@@ -210,6 +211,7 @@ function BodyEditor({ request }: { request: RequestConfig }) {
 
 function AuthEditor({ request }: { request: RequestConfig }) {
   const updateRequest = useAppStore(s => s.updateRequest);
+  const getActiveVariables = useAppStore(s => s.getActiveVariables);
 
   const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
@@ -487,7 +489,10 @@ function AuthEditor({ request }: { request: RequestConfig }) {
               {/* Get Authorization Code button */}
               <button
                 onClick={() => {
-                  const cfg = { ...defaultOAuth2Config(), ...request.auth.oauth2 };
+                  const cfg = resolveOAuth2Config(
+                    { ...defaultOAuth2Config(), ...request.auth.oauth2 },
+                    getActiveVariables(),
+                  );
                   const url = buildAuthorizationUrl(cfg);
                   window.open(url, '_blank', 'width=600,height=700');
                 }}
@@ -546,12 +551,13 @@ function AuthEditor({ request }: { request: RequestConfig }) {
                 setTokenError(null);
                 setTokenLoading(true);
                 try {
-                  const cfg = { ...defaultOAuth2Config(), ...request.auth.oauth2 };
+                  const raw = { ...defaultOAuth2Config(), ...request.auth.oauth2 };
+                  const cfg = resolveOAuth2Config(raw, getActiveVariables());
                   const token = await fetchOAuth2Token(
                     cfg,
                     cfg.grantType === 'authorization_code' ? authCode : undefined,
                   );
-                  updateAuth({ oauth2: { ...cfg, token } });
+                  updateAuth({ oauth2: { ...raw, token } });
                   setAuthCode('');
                 } catch (err) {
                   setTokenError(err instanceof Error ? err.message : 'Failed to fetch token');
@@ -601,5 +607,20 @@ function defaultOAuth2Config(): import('../types').OAuth2Config {
     clientSecret: '',
     scope: '',
     callbackUrl: '',
+  };
+}
+
+function resolveOAuth2Config(
+  cfg: import('../types').OAuth2Config,
+  vars: Record<string, string>,
+): import('../types').OAuth2Config {
+  return {
+    ...cfg,
+    authUrl: resolveVariables(cfg.authUrl, vars),
+    tokenUrl: resolveVariables(cfg.tokenUrl, vars),
+    clientId: resolveVariables(cfg.clientId, vars),
+    clientSecret: resolveVariables(cfg.clientSecret, vars),
+    scope: resolveVariables(cfg.scope, vars),
+    callbackUrl: resolveVariables(cfg.callbackUrl, vars),
   };
 }

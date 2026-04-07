@@ -77,6 +77,7 @@ interface PostmanAuth {
   basic?: PostmanAuthAttr[];
   bearer?: PostmanAuthAttr[];
   apikey?: PostmanAuthAttr[];
+  oauth2?: PostmanAuthAttr[];
 }
 
 interface PostmanAuthAttr {
@@ -306,13 +307,16 @@ function convertAuth(auth?: PostmanAuth): AuthConfig {
           addTo: getAuthAttr(auth.apikey, 'in') === 'query' ? 'query' : 'header',
         },
       };
-    case 'oauth2':
+    case 'oauth2': {
+      const grant = getAuthAttr(auth.oauth2, 'grant_type');
+      if (grant !== 'authorization_code' && grant !== 'client_credentials') {
+        // Unsupported OAuth2 grant type (implicit, password, etc.) — import as no auth
+        return { type: 'none' };
+      }
       return {
         type: 'oauth2',
         oauth2: {
-          grantType: getAuthAttr(auth.oauth2, 'grant_type') === 'authorization_code'
-            ? 'authorization_code'
-            : 'client_credentials',
+          grantType: grant,
           authUrl: getAuthAttr(auth.oauth2, 'authUrl'),
           tokenUrl: getAuthAttr(auth.oauth2, 'accessTokenUrl'),
           clientId: getAuthAttr(auth.oauth2, 'clientId'),
@@ -321,6 +325,7 @@ function convertAuth(auth?: PostmanAuth): AuthConfig {
           callbackUrl: getAuthAttr(auth.oauth2, 'redirect_uri'),
         },
       };
+    }
     default:
       // Unsupported auth types (oauth1, digest, etc.) — import as no auth
       return { type: 'none' };

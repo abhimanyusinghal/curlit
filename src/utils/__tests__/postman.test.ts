@@ -420,20 +420,47 @@ describe('parsePostmanCollection: auth', () => {
     expect(requests[0].auth.type).toBe('none');
   });
 
-  it('maps oauth2 auth type from Postman', () => {
+  it('maps oauth2 client_credentials auth type from Postman', () => {
     const col = postmanCollection({
       item: [{
         name: 'Test',
         request: {
           method: 'GET',
           url: 'https://example.com',
-          auth: { type: 'oauth2', oauth2: [] },
+          auth: {
+            type: 'oauth2',
+            oauth2: [
+              { key: 'grant_type', value: 'client_credentials' },
+              { key: 'accessTokenUrl', value: 'https://auth.example.com/token' },
+              { key: 'clientId', value: 'my-id' },
+            ],
+          },
         },
       }],
     });
     const { requests } = parsePostmanCollection(col as any);
     expect(requests[0].auth.type).toBe('oauth2');
     expect(requests[0].auth.oauth2?.grantType).toBe('client_credentials');
+    expect(requests[0].auth.oauth2?.tokenUrl).toBe('https://auth.example.com/token');
+    expect(requests[0].auth.oauth2?.clientId).toBe('my-id');
+  });
+
+  it('falls back to no auth for unsupported oauth2 grant types', () => {
+    const col = postmanCollection({
+      item: [{
+        name: 'Test',
+        request: {
+          method: 'GET',
+          url: 'https://example.com',
+          auth: {
+            type: 'oauth2',
+            oauth2: [{ key: 'grant_type', value: 'implicit' }],
+          },
+        },
+      }],
+    });
+    const { requests } = parsePostmanCollection(col as any);
+    expect(requests[0].auth.type).toBe('none');
   });
 
   it('returns no auth for unsupported auth types', () => {

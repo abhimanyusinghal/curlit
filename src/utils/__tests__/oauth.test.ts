@@ -43,6 +43,13 @@ describe('buildAuthorizationUrl', () => {
     expect(parsed.searchParams.has('scope')).toBe(false);
   });
 
+  it('omits redirect_uri when callbackUrl is empty', () => {
+    const config = makeConfig({ callbackUrl: '' });
+    const url = buildAuthorizationUrl(config);
+    const parsed = new URL(url);
+    expect(parsed.searchParams.has('redirect_uri')).toBe(false);
+  });
+
   it('appends with & when authUrl already has query params', () => {
     const config = makeConfig({ authUrl: 'https://auth.example.com/authorize?existing=1' });
     const url = buildAuthorizationUrl(config);
