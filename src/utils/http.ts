@@ -366,7 +366,9 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
         const parsed = JSON.parse(dataBody);
         // Detect GraphQL requests: either a 'query' field with a GraphQL keyword,
         // or a persisted-query shape (operationName/extensions without query)
-        const hasGraphQLQuery = typeof parsed.query === 'string' && /^\s*(query[\s({]|mutation[\s({]|subscription[\s({]|fragment\s|\{)/.test(parsed.query);
+        // Strip leading # comment lines before testing for GraphQL keywords
+        const strippedQuery = typeof parsed.query === 'string' ? parsed.query.replace(/^\s*(#[^\n]*\n\s*)*/,'') : '';
+        const hasGraphQLQuery = typeof parsed.query === 'string' && /^\s*(query[\s({]|mutation[\s({]|subscription[\s({]|fragment\s|\{)/.test(strippedQuery);
         const hasPersistedQuery = !parsed.query && (typeof parsed.operationName === 'string' || parsed.extensions);
         if (hasGraphQLQuery || hasPersistedQuery) {
           result.body = {

@@ -551,6 +551,21 @@ describe('parseCurlCommand', () => {
     expect(result.body!.type).toBe('json');
   });
 
+  it('detects GraphQL query with leading comment lines', () => {
+    const result = parseCurlCommand(
+      `curl -X POST 'https://api.example.com/graphql' -d '{"query":"# fetch users\\nquery { users { id } }"}'`
+    );
+    expect(result.body!.type).toBe('graphql');
+    expect(result.body!.graphql!.query).toContain('# fetch users');
+  });
+
+  it('does not detect comment-only query as GraphQL', () => {
+    const result = parseCurlCommand(
+      `curl -X POST 'https://api.example.com/search' -d '{"query":"# just a comment"}'`
+    );
+    expect(result.body!.type).toBe('json');
+  });
+
   it('honors --url flag for the target URL', () => {
     const result = parseCurlCommand(`curl --url https://api.example.com/graphql -d '{"query":"{ hello }"}'`);
     expect(result.url).toBe('https://api.example.com/graphql');
