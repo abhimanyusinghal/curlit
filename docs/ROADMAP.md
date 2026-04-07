@@ -43,7 +43,7 @@
 
 - [x] File upload support in Form Data body type
 - [x] Binary body support
-- [ ] GraphQL mode with query/variables editor and schema introspection
+- [x] GraphQL mode with query/variables editor and schema introspection
 - [ ] OAuth 2.0 authentication flow (authorization code, client credentials)
 - [ ] Pre-request scripts (JavaScript, runs before send)
 - [ ] Post-response tests (assertions on status, body, headers)

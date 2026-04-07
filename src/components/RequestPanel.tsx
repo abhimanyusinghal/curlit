@@ -10,6 +10,7 @@ import type { Theme } from '../store';
 import { KeyValueEditor } from './KeyValueEditor';
 import { FormDataEditor } from './FormDataEditor';
 import { BinaryBodyEditor } from './BinaryBodyEditor';
+import { GraphQLEditor } from './GraphQLEditor';
 
 type RequestTabType = 'params' | 'headers' | 'body' | 'auth';
 
@@ -97,12 +98,18 @@ function BodyEditor({ request }: { request: RequestConfig }) {
     { id: 'form-data', label: 'Form Data' },
     { id: 'x-www-form-urlencoded', label: 'URL Encoded' },
     { id: 'binary', label: 'Binary' },
+    { id: 'graphql', label: 'GraphQL' },
   ];
 
   const updateBody = (updates: Partial<RequestConfig['body']>) => {
-    updateRequest(request.id, {
+    const reqUpdates: Partial<RequestConfig> = {
       body: { ...request.body, ...updates },
-    });
+    };
+    // Auto-switch to POST when selecting GraphQL
+    if (updates.type === 'graphql' && ['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+      reqUpdates.method = 'POST';
+    }
+    updateRequest(request.id, reqUpdates);
   };
 
   const getExtension = () => {
@@ -180,6 +187,20 @@ function BodyEditor({ request }: { request: RequestConfig }) {
           requestId={request.id}
           binaryFile={request.body.binaryFile}
           onChange={binaryFile => updateBody({ binaryFile })}
+        />
+      )}
+
+      {request.body.type === 'graphql' && (
+        <GraphQLEditor
+          requestId={request.id}
+          query={request.body.graphql?.query ?? ''}
+          variables={request.body.graphql?.variables ?? ''}
+          onQueryChange={query =>
+            updateBody({ graphql: { query, variables: request.body.graphql?.variables ?? '' } })
+          }
+          onVariablesChange={variables =>
+            updateBody({ graphql: { query: request.body.graphql?.query ?? '', variables } })
+          }
         />
       )}
     </div>

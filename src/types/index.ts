@@ -15,7 +15,7 @@ export interface FormDataEntry extends KeyValuePair {
   fileType?: string;
 }
 
-export type BodyType = 'none' | 'json' | 'text' | 'xml' | 'form-data' | 'x-www-form-urlencoded' | 'binary';
+export type BodyType = 'none' | 'json' | 'text' | 'xml' | 'form-data' | 'x-www-form-urlencoded' | 'binary' | 'graphql';
 
 export type AuthType = 'none' | 'basic' | 'bearer' | 'api-key';
 
@@ -42,6 +42,10 @@ export interface RequestConfig {
       fileName: string;
       fileSize: number;
       fileType: string;
+    };
+    graphql?: {
+      query: string;
+      variables: string;
     };
   };
   auth: AuthConfig;

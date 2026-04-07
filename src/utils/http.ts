@@ -46,6 +46,18 @@ export function buildBody(request: RequestConfig): string | FormData | File | nu
   switch (request.body.type) {
     case 'none':
       return null;
+    case 'graphql': {
+      const gql: Record<string, unknown> = { query: request.body.graphql?.query ?? '' };
+      const varsStr = request.body.graphql?.variables?.trim();
+      if (varsStr) {
+        try {
+          gql.variables = JSON.parse(varsStr);
+        } catch {
+          gql.variables = {};
+        }
+      }
+      return JSON.stringify(gql);
+    }
     case 'json':
     case 'text':
     case 'xml':
@@ -111,6 +123,10 @@ export function resolveRequestVariables(request: RequestConfig, variables: Recor
         key: resolveVariables(f.key, variables),
         value: resolveVariables(f.value, variables),
       })),
+      graphql: request.body.graphql ? {
+        query: resolveVariables(request.body.graphql.query, variables),
+        variables: resolveVariables(request.body.graphql.variables, variables),
+      } : undefined,
     },
     auth: resolveAuthVariables(request.auth, variables),
   };
@@ -168,7 +184,9 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
   const headers = buildHeaders(request.headers, request.auth);
   const body = buildBody(request);
 
-  if (request.body.type === 'json' && !headers['Content-Type']) {
+  if (request.body.type === 'graphql' && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  } else if (request.body.type === 'json' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   } else if (request.body.type === 'xml' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/xml';
@@ -261,13 +279,13 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
 
   const cleaned = curlStr.replace(/\\\n/g, ' ').replace(/\s+/g, ' ').trim();
 
-  // Extract URL
-  const urlMatch = cleaned.match(/curl\s+(?:['"]([^'"]+)['"]|(\S+))/i);
-  if (!urlMatch) {
-    const genericUrl = cleaned.match(/(?:https?:\/\/\S+)/);
-    if (genericUrl) result.url = genericUrl[0];
+  // Extract URL — find a quoted or unquoted http(s) URL anywhere in the command
+  const quotedUrl = cleaned.match(/['"]((https?:\/\/)[^'"]+)['"]/i);
+  if (quotedUrl) {
+    result.url = quotedUrl[1];
   } else {
-    result.url = urlMatch[1] || urlMatch[2];
+    const bareUrl = cleaned.match(/(https?:\/\/\S+)/i);
+    if (bareUrl) result.url = bareUrl[1];
   }
 
   // Extract method
@@ -305,14 +323,29 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
       binaryFile: { fileName, fileSize: 0, fileType: 'application/octet-stream' },
     };
   } else {
-    const dataMatch = cleaned.match(/(?:-d|--data|--data-raw|--data-binary)\s+['"]([^'"]*)['"]/i);
+    const dataMatch = cleaned.match(/(?:-d|--data|--data-raw|--data-binary)\s+(?:'([^']*)'|"([^"]*)")/i);
     if (dataMatch) {
+      const dataBody = dataMatch[1] ?? dataMatch[2];
       if (!methodMatch) result.method = 'POST';
       try {
-        JSON.parse(dataMatch[1]);
-        result.body = { type: 'json', raw: dataMatch[1], formData: [], urlencoded: [] };
+        const parsed = JSON.parse(dataBody);
+        // Detect GraphQL requests by checking for a 'query' field with a string value
+        if (typeof parsed.query === 'string' && /^\s*(query|mutation|subscription|\{)/.test(parsed.query)) {
+          result.body = {
+            type: 'graphql',
+            raw: '',
+            formData: [],
+            urlencoded: [],
+            graphql: {
+              query: parsed.query,
+              variables: parsed.variables ? JSON.stringify(parsed.variables, null, 2) : '',
+            },
+          };
+        } else {
+          result.body = { type: 'json', raw: dataBody, formData: [], urlencoded: [] };
+        }
       } catch {
-        result.body = { type: 'text', raw: dataMatch[1], formData: [], urlencoded: [] };
+        result.body = { type: 'text', raw: dataBody, formData: [], urlencoded: [] };
       }
     }
   }
