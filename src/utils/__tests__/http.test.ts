@@ -197,6 +197,37 @@ describe('buildBody', () => {
     });
     expect(buildBody(req)).toBeNull();
   });
+
+  it('includes operationName in graphql body when set', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: 'query GetUser { user { id } }', variables: '', operationName: 'GetUser' } },
+    });
+    const result = buildBody(req);
+    const parsed = JSON.parse(result as string);
+    expect(parsed.operationName).toBe('GetUser');
+  });
+
+  it('includes extensions in graphql body when set', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: '{ user { id } }', variables: '', extensions: '{"persistedQuery":{"sha256Hash":"abc"}}' } },
+    });
+    const result = buildBody(req);
+    const parsed = JSON.parse(result as string);
+    expect(parsed.extensions).toEqual({ persistedQuery: { sha256Hash: 'abc' } });
+  });
+
+  it('omits operationName and extensions when not set', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: '{ users { id } }', variables: '' } },
+    });
+    const result = buildBody(req);
+    const parsed = JSON.parse(result as string);
+    expect(parsed).not.toHaveProperty('operationName');
+    expect(parsed).not.toHaveProperty('extensions');
+  });
 });
 
 // ─── resolveVariables ────────────────────────────────────────────────────────
@@ -399,6 +430,32 @@ describe('parseCurlCommand', () => {
       `curl -X POST 'https://api.example.com/search' -d '{"query":"search term","page":1}'`
     );
     expect(result.body!.type).toBe('json');
+  });
+
+  it('extracts scheme-less URL like localhost:4000/graphql', () => {
+    const result = parseCurlCommand("curl localhost:4000/graphql -d '{\"query\":\"{ hello }\"}'");
+    expect(result.url).toBe('localhost:4000/graphql');
+  });
+
+  it('extracts scheme-less URL with domain like api.local:3000', () => {
+    const result = parseCurlCommand("curl api.local:3000/v1 -X GET");
+    expect(result.url).toBe('api.local:3000/v1');
+  });
+
+  it('preserves operationName from GraphQL cURL import', () => {
+    const result = parseCurlCommand(
+      `curl -X POST 'https://api.example.com/graphql' -d '{"query":"query GetUser { user { id } }","operationName":"GetUser"}'`
+    );
+    expect(result.body!.type).toBe('graphql');
+    expect(result.body!.graphql!.operationName).toBe('GetUser');
+  });
+
+  it('preserves extensions from GraphQL cURL import', () => {
+    const result = parseCurlCommand(
+      `curl -X POST 'https://api.example.com/graphql' -d '{"query":"{ user { id } }","extensions":{"persistedQuery":{"sha256Hash":"abc123"}}}'`
+    );
+    expect(result.body!.type).toBe('graphql');
+    expect(JSON.parse(result.body!.graphql!.extensions!)).toEqual({ persistedQuery: { sha256Hash: 'abc123' } });
   });
 });
 

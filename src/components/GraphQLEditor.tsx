@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -11,6 +11,7 @@ import {
 } from 'graphql';
 import { useAppStore } from '../store';
 import type { Theme } from '../store';
+import { buildUrl, buildHeaders, resolveVariables } from '../utils/http';
 import { RefreshCw, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
 
 interface Props {
@@ -27,22 +28,33 @@ const schemaCache = new Map<string, GraphQLSchema>();
 export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVariablesChange }: Props) {
   const theme = useAppStore(s => s.theme) as Theme;
   const request = useAppStore(s => s.requests[requestId]);
-  const [schema, setSchema] = useState<GraphQLSchema | null>(() => {
-    if (!request?.url) return null;
-    return schemaCache.get(request.url) ?? null;
-  });
+  const getActiveVariables = useAppStore(s => s.getActiveVariables);
+  const [schema, setSchema] = useState<GraphQLSchema | null>(null);
   const [schemaLoading, setSchemaLoading] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [showSchema, setShowSchema] = useState(false);
   const [variablesHeight, setVariablesHeight] = useState(100);
+  const prevUrlRef = useRef<string | undefined>();
+
+  // Sync schema from cache when URL changes
+  useEffect(() => {
+    const url = request?.url;
+    if (url !== prevUrlRef.current) {
+      prevUrlRef.current = url;
+      const cached = url ? schemaCache.get(url) : null;
+      setSchema(cached ?? null);
+      if (!cached) setShowSchema(false);
+    }
+  }, [request?.url]);
 
   const graphqlExtension = useMemo(() => {
     return schema ? graphqlLang(schema) : graphqlLang();
   }, [schema]);
 
   const fetchSchema = useCallback(async () => {
-    const url = request?.url?.trim();
-    if (!url) {
+    if (!request) return;
+    const rawUrl = request.url?.trim();
+    if (!rawUrl) {
       setSchemaError('Enter a GraphQL endpoint URL first');
       return;
     }
@@ -51,20 +63,43 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
     setSchemaError(null);
 
     try {
+      // Resolve environment variables and build auth headers, same as sendRequest
+      const envVars = getActiveVariables();
+      const resolvedUrl = resolveVariables(rawUrl, envVars);
+      const finalUrl = buildUrl(resolvedUrl, request.params);
+      const headers = buildHeaders(
+        request.headers.map(h => ({
+          ...h,
+          key: resolveVariables(h.key, envVars),
+          value: resolveVariables(h.value, envVars),
+        })),
+        {
+          ...request.auth,
+          basic: request.auth.basic ? {
+            username: resolveVariables(request.auth.basic.username, envVars),
+            password: resolveVariables(request.auth.basic.password, envVars),
+          } : undefined,
+          bearer: request.auth.bearer ? {
+            token: resolveVariables(request.auth.bearer.token, envVars),
+          } : undefined,
+          apiKey: request.auth.apiKey ? {
+            ...request.auth.apiKey,
+            key: resolveVariables(request.auth.apiKey.key, envVars),
+            value: resolveVariables(request.auth.apiKey.value, envVars),
+          } : undefined,
+        },
+      );
+      headers['Content-Type'] = 'application/json';
+
+      const proxyUrl = finalUrl.startsWith('http') ? finalUrl : `https://${finalUrl}`;
+
       const response = await fetch('/api/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           method: 'POST',
-          url: url.startsWith('http') ? url : `https://${url}`,
-          headers: {
-            'Content-Type': 'application/json',
-            ...Object.fromEntries(
-              (request.headers ?? [])
-                .filter(h => h.enabled && h.key)
-                .map(h => [h.key, h.value])
-            ),
-          },
+          url: proxyUrl,
+          headers,
           body: JSON.stringify({ query: getIntrospectionQuery() }),
           bodyType: 'json',
         }),
@@ -84,7 +119,7 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
 
       const introspectionResult: IntrospectionQuery = body.data;
       const clientSchema = buildClientSchema(introspectionResult);
-      schemaCache.set(url, clientSchema);
+      schemaCache.set(rawUrl, clientSchema);
       setSchema(clientSchema);
       setShowSchema(true);
     } catch (err) {
@@ -92,7 +127,7 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
     } finally {
       setSchemaLoading(false);
     }
-  }, [request?.url, request?.headers]);
+  }, [request, getActiveVariables]);
 
   return (
     <div className="flex flex-col gap-2">

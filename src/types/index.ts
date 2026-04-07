@@ -46,6 +46,8 @@ export interface RequestConfig {
     graphql?: {
       query: string;
       variables: string;
+      operationName?: string;
+      extensions?: string;
     };
   };
   auth: AuthConfig;

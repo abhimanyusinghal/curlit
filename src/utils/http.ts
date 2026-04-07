@@ -56,6 +56,16 @@ export function buildBody(request: RequestConfig): string | FormData | File | nu
           gql.variables = {};
         }
       }
+      if (request.body.graphql?.operationName) {
+        gql.operationName = request.body.graphql.operationName;
+      }
+      if (request.body.graphql?.extensions?.trim()) {
+        try {
+          gql.extensions = JSON.parse(request.body.graphql.extensions);
+        } catch {
+          // skip malformed extensions
+        }
+      }
       return JSON.stringify(gql);
     }
     case 'json':
@@ -126,6 +136,10 @@ export function resolveRequestVariables(request: RequestConfig, variables: Recor
       graphql: request.body.graphql ? {
         query: resolveVariables(request.body.graphql.query, variables),
         variables: resolveVariables(request.body.graphql.variables, variables),
+        operationName: request.body.graphql.operationName
+          ? resolveVariables(request.body.graphql.operationName, variables) : undefined,
+        extensions: request.body.graphql.extensions
+          ? resolveVariables(request.body.graphql.extensions, variables) : undefined,
       } : undefined,
     },
     auth: resolveAuthVariables(request.auth, variables),
@@ -279,13 +293,20 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
 
   const cleaned = curlStr.replace(/\\\n/g, ' ').replace(/\s+/g, ' ').trim();
 
-  // Extract URL — find a quoted or unquoted http(s) URL anywhere in the command
+  // Extract URL — prefer a quoted or unquoted http(s) URL, fall back to
+  // scheme-less targets like "localhost:4000/graphql"
   const quotedUrl = cleaned.match(/['"]((https?:\/\/)[^'"]+)['"]/i);
   if (quotedUrl) {
     result.url = quotedUrl[1];
   } else {
     const bareUrl = cleaned.match(/(https?:\/\/\S+)/i);
-    if (bareUrl) result.url = bareUrl[1];
+    if (bareUrl) {
+      result.url = bareUrl[1];
+    } else {
+      // Fall back: find a scheme-less URL like localhost:4000/graphql
+      const schemeless = cleaned.match(/(?:^|\s)['"]?((?:localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|[\w.-]+\.\w{2,})(?::\d+)?(?:\/\S*)?)['"]?/i);
+      if (schemeless) result.url = schemeless[1];
+    }
   }
 
   // Extract method
@@ -339,6 +360,8 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
             graphql: {
               query: parsed.query,
               variables: parsed.variables ? JSON.stringify(parsed.variables, null, 2) : '',
+              operationName: parsed.operationName || undefined,
+              extensions: parsed.extensions ? JSON.stringify(parsed.extensions, null, 2) : undefined,
             },
           };
         } else {
