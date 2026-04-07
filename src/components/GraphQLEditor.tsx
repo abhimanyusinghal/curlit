@@ -18,8 +18,8 @@ import { buildUrl, buildHeaders, resolveVariables } from '../utils/http';
 function buildSchemaCacheKey(
   request: {
     url: string;
-    params: { key: string; value: string; enabled: boolean }[];
-    headers: { key: string; value: string; enabled: boolean }[];
+    params: import('../types').KeyValuePair[];
+    headers: import('../types').KeyValuePair[];
     auth: import('../types').AuthConfig;
   },
   envVars: Record<string, string>,
