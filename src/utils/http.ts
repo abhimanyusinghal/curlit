@@ -299,7 +299,7 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
   // Extract URL — tokenise the command and grab the first non-flag argument.
   // This avoids picking up http(s) literals buried inside -d/-H values.
   {
-    const flagsWithArg = new Set(['-X', '-H', '-d', '-u', '-o', '-A', '-e', '-b', '-c', '--request', '--data', '--data-raw', '--data-binary', '--data-urlencode', '--header', '--user', '--output', '--user-agent', '--referer', '--cookie', '--cookie-jar', '--max-time', '--connect-timeout', '--retry', '--url', '--proxy', '--cert', '--key', '--cacert']);
+    const flagsWithArg = new Set(['-X', '-H', '-d', '-u', '-o', '-A', '-e', '-b', '-c', '--request', '--data', '--data-raw', '--data-binary', '--data-urlencode', '--header', '--user', '--output', '--user-agent', '--referer', '--cookie', '--cookie-jar', '--max-time', '--connect-timeout', '--retry', '--proxy', '--cert', '--key', '--cacert']);
     const args = cleaned.replace(/^curl\s+/i, '');
     const tokens: string[] = [];
     const tokenRegex = /'([^']*)'|"([^"]*)"|(\S+)/g;
@@ -309,6 +309,11 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
     }
     for (let i = 0; i < tokens.length; i++) {
       const t = tokens[i];
+      // --url explicitly provides the target URL
+      if (t === '--url' && i + 1 < tokens.length) {
+        result.url = tokens[++i];
+        break;
+      }
       if (t.startsWith('-')) {
         if (flagsWithArg.has(t)) i++;
         continue;

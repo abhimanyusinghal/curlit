@@ -551,6 +551,17 @@ describe('parseCurlCommand', () => {
     expect(result.body!.type).toBe('graphql');
     expect(result.body!.graphql!.query).toContain('# fetch users');
   });
+
+  it('honors --url flag for the target URL', () => {
+    const result = parseCurlCommand(`curl --url https://api.example.com/graphql -d '{"query":"{ hello }"}'`);
+    expect(result.url).toBe('https://api.example.com/graphql');
+  });
+
+  it('honors --url flag with quoted value', () => {
+    const result = parseCurlCommand(`curl -X POST --url 'https://api.example.com/graphql' -d '{"query":"{ hello }"}'`);
+    expect(result.url).toBe('https://api.example.com/graphql');
+    expect(result.method).toBe('POST');
+  });
 });
 
 // ─── generateCurlCommand ────────────────────────────────────────────────────
