@@ -1180,14 +1180,14 @@ function extractAuth(spec: OpenApiSpec, operation: Operation): AuthConfig {
     if (!rawScheme) continue;
 
     const scheme = resolveSecuritySchemeRef(spec, rawScheme as SecuritySchemeOrRef);
-    const requiredScopes = req[schemeName] || [];
+    const requiredScopes = req[schemeName]; // undefined if absent, [] if explicitly empty
     return convertSecurityScheme(scheme, requiredScopes);
   }
 
   return { type: 'none' };
 }
 
-function convertSecurityScheme(scheme: SecurityScheme, requiredScopes: string[] = []): AuthConfig {
+function convertSecurityScheme(scheme: SecurityScheme, requiredScopes?: string[]): AuthConfig {
   // OpenAPI 3.x "http" type
   if (scheme.type === 'http') {
     if (scheme.scheme?.toLowerCase() === 'basic') {
@@ -1222,8 +1222,11 @@ function convertSecurityScheme(scheme: SecurityScheme, requiredScopes: string[] 
   // Use operation-level required scopes when available; fall back to all flow scopes
   if (scheme.type === 'oauth2') {
     const flows = scheme.flows;
+    // undefined = no operation scopes specified, use all flow scopes
+    // [] = operation explicitly requires no scopes, use empty string
+    // ['read'] = operation requires specific scopes
     const scopeStr = (flow: OAuthFlow | undefined) =>
-      requiredScopes.length > 0
+      requiredScopes !== undefined
         ? requiredScopes.join(' ')
         : flow?.scopes ? Object.keys(flow.scopes).join(' ') : '';
     if (flows?.authorizationCode) {

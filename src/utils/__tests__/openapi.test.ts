@@ -1266,7 +1266,7 @@ describe('parseOpenApiSpec - authentication', () => {
     expect(result.requests[0].auth.oauth2?.scope).toBe('read');
   });
 
-  it('falls back to all flow scopes when operation specifies empty scope list', () => {
+  it('preserves empty scope when operation explicitly requires none', () => {
     const result = parseOpenApiSpec({
       openapi: '3.0.0',
       info: { title: 'API', version: '1.0' },
@@ -1290,7 +1290,8 @@ describe('parseOpenApiSpec - authentication', () => {
       },
     });
 
-    expect(result.requests[0].auth.oauth2?.scope).toBe('read write');
+    // Empty array = no scopes required, not "all scopes"
+    expect(result.requests[0].auth.oauth2?.scope).toBe('');
   });
 
   it('operation-level security overrides global', () => {

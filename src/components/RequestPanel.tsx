@@ -589,7 +589,7 @@ function AuthEditor({ request }: { request: RequestConfig }) {
               {tokenLoading
                 ? 'Requesting...'
                 : request.auth.oauth2?.token?.accessToken
-                  ? 'Refresh Token'
+                  ? 'Get New Token'
                   : 'Get Token'}
             </button>
             {request.auth.oauth2?.token?.accessToken && (
