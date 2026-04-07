@@ -864,6 +864,7 @@ describe('parseOpenApiSpec - request body', () => {
                     required: ['file'],
                     properties: {
                       file: { type: 'string', format: 'binary' },
+                      thumbnail: { type: 'string', format: 'byte' },
                       description: { type: 'string', example: 'My file' },
                     },
                   },
@@ -876,13 +877,16 @@ describe('parseOpenApiSpec - request body', () => {
     });
 
     expect(result.requests[0].body.type).toBe('form-data');
-    expect(result.requests[0].body.formData).toHaveLength(2);
+    expect(result.requests[0].body.formData).toHaveLength(3);
     expect(result.requests[0].body.formData[0].key).toBe('file');
     expect(result.requests[0].body.formData[0].valueType).toBe('file');
     expect(result.requests[0].body.formData[0].value).toBe('');
-    expect(result.requests[0].body.formData[1].key).toBe('description');
+    // format: byte is base64-encoded text, not a file upload
+    expect(result.requests[0].body.formData[1].key).toBe('thumbnail');
     expect(result.requests[0].body.formData[1].valueType).toBe('text');
-    expect(result.requests[0].body.formData[1].value).toBe('My file');
+    expect(result.requests[0].body.formData[2].key).toBe('description');
+    expect(result.requests[0].body.formData[2].valueType).toBe('text');
+    expect(result.requests[0].body.formData[2].value).toBe('My file');
   });
 
   it('skips readOnly properties in body', () => {
