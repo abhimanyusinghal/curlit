@@ -63,33 +63,48 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
     setSchemaError(null);
 
     try {
-      // Resolve environment variables and build auth headers, same as sendRequest
+      // Resolve environment variables, params, and auth — same as sendRequest
       const envVars = getActiveVariables();
       const resolvedUrl = resolveVariables(rawUrl, envVars);
-      const finalUrl = buildUrl(resolvedUrl, request.params);
+      const resolvedParams = request.params.map(p => ({
+        ...p,
+        key: resolveVariables(p.key, envVars),
+        value: resolveVariables(p.value, envVars),
+      }));
+      let finalUrl = buildUrl(resolvedUrl, resolvedParams);
+
+      const resolvedAuth = {
+        ...request.auth,
+        basic: request.auth.basic ? {
+          username: resolveVariables(request.auth.basic.username, envVars),
+          password: resolveVariables(request.auth.basic.password, envVars),
+        } : undefined,
+        bearer: request.auth.bearer ? {
+          token: resolveVariables(request.auth.bearer.token, envVars),
+        } : undefined,
+        apiKey: request.auth.apiKey ? {
+          ...request.auth.apiKey,
+          key: resolveVariables(request.auth.apiKey.key, envVars),
+          value: resolveVariables(request.auth.apiKey.value, envVars),
+        } : undefined,
+      };
+
       const headers = buildHeaders(
         request.headers.map(h => ({
           ...h,
           key: resolveVariables(h.key, envVars),
           value: resolveVariables(h.value, envVars),
         })),
-        {
-          ...request.auth,
-          basic: request.auth.basic ? {
-            username: resolveVariables(request.auth.basic.username, envVars),
-            password: resolveVariables(request.auth.basic.password, envVars),
-          } : undefined,
-          bearer: request.auth.bearer ? {
-            token: resolveVariables(request.auth.bearer.token, envVars),
-          } : undefined,
-          apiKey: request.auth.apiKey ? {
-            ...request.auth.apiKey,
-            key: resolveVariables(request.auth.apiKey.key, envVars),
-            value: resolveVariables(request.auth.apiKey.value, envVars),
-          } : undefined,
-        },
+        resolvedAuth,
       );
       headers['Content-Type'] = 'application/json';
+
+      // Append API key to query string if configured
+      if (resolvedAuth.type === 'api-key' && resolvedAuth.apiKey?.addTo === 'query') {
+        const urlObj = new URL(finalUrl.startsWith('http') ? finalUrl : `https://${finalUrl}`);
+        urlObj.searchParams.append(resolvedAuth.apiKey.key, resolvedAuth.apiKey.value);
+        finalUrl = urlObj.toString();
+      }
 
       const proxyUrl = finalUrl.startsWith('http') ? finalUrl : `https://${finalUrl}`;
 

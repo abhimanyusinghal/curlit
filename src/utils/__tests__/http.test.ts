@@ -457,6 +457,35 @@ describe('parseCurlCommand', () => {
     expect(result.body!.type).toBe('graphql');
     expect(JSON.parse(result.body!.graphql!.extensions!)).toEqual({ persistedQuery: { sha256Hash: 'abc123' } });
   });
+
+  it('detects persisted-query cURL with operationName but no query field', () => {
+    const result = parseCurlCommand(
+      `curl -X POST 'https://api.example.com/graphql' -d '{"operationName":"GetUser","variables":{"id":"1"},"extensions":{"persistedQuery":{"sha256Hash":"abc"}}}'`
+    );
+    expect(result.body!.type).toBe('graphql');
+    expect(result.body!.graphql!.query).toBe('');
+    expect(result.body!.graphql!.operationName).toBe('GetUser');
+    expect(JSON.parse(result.body!.graphql!.variables)).toEqual({ id: '1' });
+    expect(JSON.parse(result.body!.graphql!.extensions!)).toEqual({ persistedQuery: { sha256Hash: 'abc' } });
+  });
+
+  it('detects persisted-query cURL with only extensions', () => {
+    const result = parseCurlCommand(
+      `curl -X POST 'https://api.example.com/graphql' -d '{"extensions":{"persistedQuery":{"sha256Hash":"def456"}}}'`
+    );
+    expect(result.body!.type).toBe('graphql');
+    expect(result.body!.graphql!.query).toBe('');
+  });
+
+  it('extracts single-label host with port like graphql:4000', () => {
+    const result = parseCurlCommand("curl graphql:4000 -d '{\"query\":\"{ hello }\"}'");
+    expect(result.url).toBe('graphql:4000');
+  });
+
+  it('extracts single-label host with port and path like api:8080/graphql', () => {
+    const result = parseCurlCommand("curl api:8080/graphql -X POST");
+    expect(result.url).toBe('api:8080/graphql');
+  });
 });
 
 // ─── generateCurlCommand ────────────────────────────────────────────────────

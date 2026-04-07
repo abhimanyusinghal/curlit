@@ -303,8 +303,9 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
     if (bareUrl) {
       result.url = bareUrl[1];
     } else {
-      // Fall back: find a scheme-less URL like localhost:4000/graphql
-      const schemeless = cleaned.match(/(?:^|\s)['"]?((?:localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|[\w.-]+\.\w{2,})(?::\d+)?(?:\/\S*)?)['"]?/i);
+      // Fall back: find a scheme-less URL (localhost, IPs, dotted hosts, or
+      // single-label hosts with a port like graphql:4000 or api:8080/path)
+      const schemeless = cleaned.match(/(?:^|\s)['"]?((?:localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|[\w.-]+\.\w{2,}|[\w-]+:\d+)(?::\d+)?(?:\/\S*)?)['"]?/i);
       if (schemeless) result.url = schemeless[1];
     }
   }
@@ -350,15 +351,18 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
       if (!methodMatch) result.method = 'POST';
       try {
         const parsed = JSON.parse(dataBody);
-        // Detect GraphQL requests by checking for a 'query' field with a string value
-        if (typeof parsed.query === 'string' && /^\s*(query|mutation|subscription|\{)/.test(parsed.query)) {
+        // Detect GraphQL requests: either a 'query' field with a GraphQL keyword,
+        // or a persisted-query shape (operationName/extensions without query)
+        const hasGraphQLQuery = typeof parsed.query === 'string' && /^\s*(query|mutation|subscription|\{)/.test(parsed.query);
+        const hasPersistedQuery = !parsed.query && (typeof parsed.operationName === 'string' || parsed.extensions);
+        if (hasGraphQLQuery || hasPersistedQuery) {
           result.body = {
             type: 'graphql',
             raw: '',
             formData: [],
             urlencoded: [],
             graphql: {
-              query: parsed.query,
+              query: parsed.query ?? '',
               variables: parsed.variables ? JSON.stringify(parsed.variables, null, 2) : '',
               operationName: parsed.operationName || undefined,
               extensions: parsed.extensions ? JSON.stringify(parsed.extensions, null, 2) : undefined,

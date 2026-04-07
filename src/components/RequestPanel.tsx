@@ -196,10 +196,10 @@ function BodyEditor({ request }: { request: RequestConfig }) {
           query={request.body.graphql?.query ?? ''}
           variables={request.body.graphql?.variables ?? ''}
           onQueryChange={query =>
-            updateBody({ graphql: { query, variables: request.body.graphql?.variables ?? '' } })
+            updateBody({ graphql: { ...request.body.graphql, query, variables: request.body.graphql?.variables ?? '' } })
           }
           onVariablesChange={variables =>
-            updateBody({ graphql: { query: request.body.graphql?.query ?? '', variables } })
+            updateBody({ graphql: { ...request.body.graphql, query: request.body.graphql?.query ?? '', variables } })
           }
         />
       )}
