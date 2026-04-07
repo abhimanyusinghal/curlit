@@ -1344,6 +1344,52 @@ describe('parseOpenApiSpec - authentication', () => {
     expect(result.requests[0].auth.type).toBe('basic');
   });
 
+  it('maps Swagger 2.0 OAuth2 accessCode flow to authorization_code', () => {
+    const result = parseOpenApiSpec({
+      swagger: '2.0',
+      info: { title: 'API', version: '1.0' },
+      paths: { '/secure': { get: {} } },
+      securityDefinitions: {
+        OAuth: {
+          type: 'oauth2',
+          flow: 'accessCode',
+          authorizationUrl: 'https://auth.example.com/authorize',
+          tokenUrl: 'https://auth.example.com/token',
+          scopes: { read: 'Read', write: 'Write' },
+        },
+      },
+      security: [{ OAuth: ['read'] }],
+    } as any);
+
+    expect(result.requests[0].auth.type).toBe('oauth2');
+    expect(result.requests[0].auth.oauth2?.grantType).toBe('authorization_code');
+    expect(result.requests[0].auth.oauth2?.authUrl).toBe('https://auth.example.com/authorize');
+    expect(result.requests[0].auth.oauth2?.tokenUrl).toBe('https://auth.example.com/token');
+    expect(result.requests[0].auth.oauth2?.scope).toBe('read');
+  });
+
+  it('maps Swagger 2.0 OAuth2 application flow to client_credentials', () => {
+    const result = parseOpenApiSpec({
+      swagger: '2.0',
+      info: { title: 'API', version: '1.0' },
+      paths: { '/secure': { get: {} } },
+      securityDefinitions: {
+        OAuth: {
+          type: 'oauth2',
+          flow: 'application',
+          tokenUrl: 'https://auth.example.com/token',
+          scopes: { api: 'API access' },
+        },
+      },
+      security: [{ OAuth: [] }],
+    } as any);
+
+    expect(result.requests[0].auth.type).toBe('oauth2');
+    expect(result.requests[0].auth.oauth2?.grantType).toBe('client_credentials');
+    expect(result.requests[0].auth.oauth2?.tokenUrl).toBe('https://auth.example.com/token');
+    expect(result.requests[0].auth.oauth2?.scope).toBe('');
+  });
+
   it('resolves $ref in security schemes', () => {
     const result = parseOpenApiSpec({
       openapi: '3.0.0',

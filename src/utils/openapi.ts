@@ -223,6 +223,9 @@ interface SecurityScheme {
   bearerFormat?: string;
   flow?: string;                   // Swagger 2.0
   flows?: OAuthFlows;              // OpenAPI 3.x
+  authorizationUrl?: string;       // Swagger 2.0 (flat on scheme)
+  tokenUrl?: string;               // Swagger 2.0 (flat on scheme)
+  scopes?: Record<string, string>; // Swagger 2.0 (flat on scheme)
   openIdConnectUrl?: string;
 }
 
@@ -1256,6 +1259,41 @@ function convertSecurityScheme(scheme: SecurityScheme, requiredScopes?: string[]
           callbackUrl: '',
         },
       };
+    }
+    // Swagger 2.0: OAuth2 fields are flat on the scheme (flow, authorizationUrl, tokenUrl, scopes)
+    if (scheme.flow) {
+      const swagger2Scope = requiredScopes !== undefined
+        ? requiredScopes.join(' ')
+        : scheme.scopes ? Object.keys(scheme.scopes).join(' ') : '';
+      // Swagger 2.0 "accessCode" = authorization_code, "application" = client_credentials
+      if (scheme.flow === 'accessCode') {
+        return {
+          type: 'oauth2',
+          oauth2: {
+            grantType: 'authorization_code',
+            authUrl: scheme.authorizationUrl || '',
+            tokenUrl: scheme.tokenUrl || '',
+            clientId: '',
+            clientSecret: '',
+            scope: swagger2Scope,
+            callbackUrl: '',
+          },
+        };
+      }
+      if (scheme.flow === 'application') {
+        return {
+          type: 'oauth2',
+          oauth2: {
+            grantType: 'client_credentials',
+            authUrl: '',
+            tokenUrl: scheme.tokenUrl || '',
+            clientId: '',
+            clientSecret: '',
+            scope: swagger2Scope,
+            callbackUrl: '',
+          },
+        };
+      }
     }
     // Fallback for implicit/password flows — use bearer as placeholder
     return { type: 'bearer', bearer: { token: '' } };

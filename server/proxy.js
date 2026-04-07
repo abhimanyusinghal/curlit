@@ -200,11 +200,17 @@ app.post('/api/oauth/token', async (req, res) => {
     });
 
     const text = await response.text();
+    const contentType = response.headers.get('content-type') || '';
     let data;
     try {
       data = JSON.parse(text);
     } catch {
-      data = { error: 'Invalid response from token endpoint', raw: text };
+      // Some providers (e.g. older GitHub) return form-encoded token responses
+      if (contentType.includes('application/x-www-form-urlencoded') || text.includes('access_token=')) {
+        data = Object.fromEntries(new URLSearchParams(text));
+      } else {
+        data = { error: 'Invalid response from token endpoint', raw: text };
+      }
     }
 
     res.status(response.status).json(data);
