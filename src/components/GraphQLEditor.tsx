@@ -13,10 +13,15 @@ import { useAppStore } from '../store';
 import type { Theme } from '../store';
 import { buildUrl, buildHeaders, resolveVariables } from '../utils/http';
 
-/** Build the fully resolved endpoint URL for cache-keying and introspection.
+/** Build a cache key from the fully resolved endpoint URL + auth headers.
  *  Returns null when the URL is empty or unresolvable. */
-function resolveEndpoint(
-  request: { url: string; params: { key: string; value: string; enabled: boolean }[]; auth: { type: string; apiKey?: { key: string; value: string; addTo: string } } },
+function buildSchemaCacheKey(
+  request: {
+    url: string;
+    params: { key: string; value: string; enabled: boolean }[];
+    headers: { key: string; value: string; enabled: boolean }[];
+    auth: import('../types').AuthConfig;
+  },
   envVars: Record<string, string>,
 ): string | null {
   const resolvedUrl = resolveVariables(request.url, envVars).trim();
@@ -36,9 +41,37 @@ function resolveEndpoint(
       );
       url = urlObj.toString();
     }
-    return url;
+    // Include header-based auth in the key so changing a token/credential
+    // invalidates the cached schema for the same URL
+    const resolvedHeaders = buildHeaders(
+      request.headers.map(h => ({
+        ...h,
+        key: resolveVariables(h.key, envVars),
+        value: resolveVariables(h.value, envVars),
+      })),
+      {
+        ...request.auth,
+        basic: request.auth.basic ? {
+          username: resolveVariables(request.auth.basic.username, envVars),
+          password: resolveVariables(request.auth.basic.password, envVars),
+        } : undefined,
+        bearer: request.auth.bearer ? {
+          token: resolveVariables(request.auth.bearer.token, envVars),
+        } : undefined,
+        apiKey: request.auth.apiKey ? {
+          ...request.auth.apiKey,
+          key: resolveVariables(request.auth.apiKey.key, envVars),
+          value: resolveVariables(request.auth.apiKey.value, envVars),
+        } : undefined,
+      },
+    );
+    // Deterministic serialisation of auth-relevant headers
+    const authPart = Object.entries(resolvedHeaders)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&');
+    return authPart ? `${url}\0${authPart}` : url;
   } catch {
-    // URL is incomplete / unparseable — not an error, just not ready yet
     return null;
   }
 }
@@ -74,7 +107,7 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
   useEffect(() => {
     if (!request) return;
     const envVars = getActiveVariables();
-    const resolved = resolveEndpoint(request, envVars);
+    const resolved = buildSchemaCacheKey(request, envVars);
     if (resolved !== prevResolvedRef.current) {
       prevResolvedRef.current = resolved;
       const cached = resolved ? schemaCache.get(resolved) ?? null : null;
@@ -117,8 +150,23 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
         } : undefined,
       };
 
-      const finalUrl = resolveEndpoint(request, envVars);
-      if (!finalUrl) throw new Error('Could not resolve endpoint URL');
+      const cacheKey = buildSchemaCacheKey(request, envVars);
+      if (!cacheKey) throw new Error('Could not resolve endpoint URL');
+
+      // Build the actual endpoint URL for the proxy (without the auth fingerprint)
+      const resolvedUrl = resolveVariables(rawUrl, envVars);
+      const resolvedParams = request.params.map(p => ({
+        ...p,
+        key: resolveVariables(p.key, envVars),
+        value: resolveVariables(p.value, envVars),
+      }));
+      let endpointUrl = buildUrl(resolvedUrl, resolvedParams);
+      if (resolvedAuth.type === 'api-key' && resolvedAuth.apiKey?.addTo === 'query') {
+        const urlObj = new URL(endpointUrl.startsWith('http') ? endpointUrl : `https://${endpointUrl}`);
+        urlObj.searchParams.append(resolvedAuth.apiKey.key, resolvedAuth.apiKey.value);
+        endpointUrl = urlObj.toString();
+      }
+
       const headers = buildHeaders(
         request.headers.map(h => ({
           ...h,
@@ -129,7 +177,7 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
       );
       headers['Content-Type'] = 'application/json';
 
-      const proxyUrl = finalUrl.startsWith('http') ? finalUrl : `https://${finalUrl}`;
+      const proxyUrl = endpointUrl.startsWith('http') ? endpointUrl : `https://${endpointUrl}`;
 
       const response = await fetch('/api/proxy', {
         method: 'POST',
@@ -157,7 +205,7 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
 
       const introspectionResult: IntrospectionQuery = body.data;
       const clientSchema = buildClientSchema(introspectionResult);
-      schemaCache.set(finalUrl, clientSchema);
+      schemaCache.set(cacheKey, clientSchema);
       setSchema(clientSchema);
       setShowSchema(true);
     } catch (err) {
