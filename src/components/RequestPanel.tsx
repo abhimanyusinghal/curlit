@@ -505,7 +505,7 @@ function AuthEditor({ request }: { request: RequestConfig }) {
                     getActiveVariables(),
                   );
                   const url = buildAuthorizationUrl(cfg);
-                  window.open(url, '_blank', 'width=600,height=700');
+                  window.open(url, '_blank', 'width=600,height=700,noopener,noreferrer');
                 }}
                 disabled={!request.auth.oauth2?.authUrl || !request.auth.oauth2?.clientId}
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-dark-600 text-dark-200 hover:bg-dark-500 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
