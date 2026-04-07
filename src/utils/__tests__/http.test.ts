@@ -520,6 +520,21 @@ describe('parseCurlCommand', () => {
     expect(result.url).toBe('api/graphql');
     expect(result.method).toBe('POST');
   });
+
+  it('ignores URL inside -d payload when extracting target', () => {
+    const result = parseCurlCommand(`curl api/graphql -d '{"callback":"https://example.com"}'`);
+    expect(result.url).toBe('api/graphql');
+  });
+
+  it('ignores URL inside -d payload when real URL comes after', () => {
+    const result = parseCurlCommand(`curl -d '{"url":"https://nested.example.com"}' https://api.example.com/graphql`);
+    expect(result.url).toBe('https://api.example.com/graphql');
+  });
+
+  it('ignores URL inside -H header value', () => {
+    const result = parseCurlCommand(`curl -H 'Referer: https://other.com' https://api.example.com/data`);
+    expect(result.url).toBe('https://api.example.com/data');
+  });
 });
 
 // ─── generateCurlCommand ────────────────────────────────────────────────────

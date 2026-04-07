@@ -296,37 +296,25 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
 
   const cleaned = curlStr.replace(/\\\n/g, ' ').replace(/\s+/g, ' ').trim();
 
-  // Extract URL — prefer a quoted or unquoted http(s) URL, fall back to
-  // scheme-less targets like "localhost:4000/graphql"
-  const quotedUrl = cleaned.match(/['"]((https?:\/\/)[^'"]+)['"]/i);
-  if (quotedUrl) {
-    result.url = quotedUrl[1];
-  } else {
-    const bareUrl = cleaned.match(/(https?:\/\/\S+)/i);
-    if (bareUrl) {
-      result.url = bareUrl[1];
-    } else {
-      // Fall back: grab the first non-flag argument after "curl", handling
-      // scheme-less targets like localhost:4000, graphql:4000, api/graphql, etc.
-      const flagsWithArg = new Set(['-X', '-H', '-d', '-u', '-o', '-A', '-e', '-b', '-c', '--request', '--data', '--data-raw', '--data-binary', '--data-urlencode', '--header', '--user', '--output', '--user-agent', '--referer', '--cookie', '--cookie-jar', '--max-time', '--connect-timeout', '--retry', '--url', '--proxy', '--cert', '--key', '--cacert']);
-      const args = cleaned.replace(/^curl\s+/i, '');
-      // Split respecting quoted strings
-      const tokens: string[] = [];
-      const tokenRegex = /'([^']*)'|"([^"]*)"|(\S+)/g;
-      let m;
-      while ((m = tokenRegex.exec(args)) !== null) {
-        tokens.push(m[1] ?? m[2] ?? m[3]);
+  // Extract URL — tokenise the command and grab the first non-flag argument.
+  // This avoids picking up http(s) literals buried inside -d/-H values.
+  {
+    const flagsWithArg = new Set(['-X', '-H', '-d', '-u', '-o', '-A', '-e', '-b', '-c', '--request', '--data', '--data-raw', '--data-binary', '--data-urlencode', '--header', '--user', '--output', '--user-agent', '--referer', '--cookie', '--cookie-jar', '--max-time', '--connect-timeout', '--retry', '--url', '--proxy', '--cert', '--key', '--cacert']);
+    const args = cleaned.replace(/^curl\s+/i, '');
+    const tokens: string[] = [];
+    const tokenRegex = /'([^']*)'|"([^"]*)"|(\S+)/g;
+    let m;
+    while ((m = tokenRegex.exec(args)) !== null) {
+      tokens.push(m[1] ?? m[2] ?? m[3]);
+    }
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (t.startsWith('-')) {
+        if (flagsWithArg.has(t)) i++;
+        continue;
       }
-      for (let i = 0; i < tokens.length; i++) {
-        const t = tokens[i];
-        // Skip flags and their arguments
-        if (t.startsWith('-')) {
-          if (flagsWithArg.has(t)) i++; // skip next token (the flag's value)
-          continue;
-        }
-        result.url = t;
-        break;
-      }
+      result.url = t;
+      break;
     }
   }
 
