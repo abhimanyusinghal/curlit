@@ -157,6 +157,22 @@ export function resolveRequestVariables(request: RequestConfig, variables: Recor
   };
 }
 
+export function resolveOAuth2Variables(
+  oauth2: import('../types').OAuth2Config,
+  variables: Record<string, string>,
+): import('../types').OAuth2Config {
+  return {
+    ...oauth2,
+    authUrl: resolveVariables(oauth2.authUrl, variables),
+    tokenUrl: resolveVariables(oauth2.tokenUrl, variables),
+    clientId: resolveVariables(oauth2.clientId, variables),
+    clientSecret: resolveVariables(oauth2.clientSecret, variables),
+    scope: resolveVariables(oauth2.scope, variables),
+    callbackUrl: resolveVariables(oauth2.callbackUrl, variables),
+    state: oauth2.state ? resolveVariables(oauth2.state, variables) : undefined,
+  };
+}
+
 function resolveAuthVariables(auth: AuthConfig, variables: Record<string, string>): AuthConfig {
   const resolved = { ...auth };
   if (resolved.basic) {
@@ -176,16 +192,7 @@ function resolveAuthVariables(auth: AuthConfig, variables: Record<string, string
     };
   }
   if (resolved.oauth2) {
-    resolved.oauth2 = {
-      ...resolved.oauth2,
-      authUrl: resolveVariables(resolved.oauth2.authUrl, variables),
-      tokenUrl: resolveVariables(resolved.oauth2.tokenUrl, variables),
-      clientId: resolveVariables(resolved.oauth2.clientId, variables),
-      clientSecret: resolveVariables(resolved.oauth2.clientSecret, variables),
-      scope: resolveVariables(resolved.oauth2.scope, variables),
-      callbackUrl: resolveVariables(resolved.oauth2.callbackUrl, variables),
-      state: resolved.oauth2.state ? resolveVariables(resolved.oauth2.state, variables) : undefined,
-    };
+    resolved.oauth2 = resolveOAuth2Variables(resolved.oauth2, variables);
   }
   return resolved;
 }

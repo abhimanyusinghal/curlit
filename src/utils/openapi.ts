@@ -1217,22 +1217,9 @@ function convertSecurityScheme(scheme: SecurityScheme): AuthConfig {
   }
 
   // OAuth2 — map to OAuth 2.0 auth config with flow details
+  // Prefer authorizationCode (more complete: has both authUrl + tokenUrl)
   if (scheme.type === 'oauth2') {
     const flows = scheme.flows;
-    if (flows?.clientCredentials) {
-      return {
-        type: 'oauth2',
-        oauth2: {
-          grantType: 'client_credentials',
-          authUrl: '',
-          tokenUrl: flows.clientCredentials.tokenUrl || '',
-          clientId: '',
-          clientSecret: '',
-          scope: flows.clientCredentials.scopes ? Object.keys(flows.clientCredentials.scopes).join(' ') : '',
-          callbackUrl: '',
-        },
-      };
-    }
     if (flows?.authorizationCode) {
       return {
         type: 'oauth2',
@@ -1243,6 +1230,20 @@ function convertSecurityScheme(scheme: SecurityScheme): AuthConfig {
           clientId: '',
           clientSecret: '',
           scope: flows.authorizationCode.scopes ? Object.keys(flows.authorizationCode.scopes).join(' ') : '',
+          callbackUrl: '',
+        },
+      };
+    }
+    if (flows?.clientCredentials) {
+      return {
+        type: 'oauth2',
+        oauth2: {
+          grantType: 'client_credentials',
+          authUrl: '',
+          tokenUrl: flows.clientCredentials.tokenUrl || '',
+          clientId: '',
+          clientSecret: '',
+          scope: flows.clientCredentials.scopes ? Object.keys(flows.clientCredentials.scopes).join(' ') : '',
           callbackUrl: '',
         },
       };

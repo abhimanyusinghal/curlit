@@ -12,7 +12,7 @@ import { FormDataEditor } from './FormDataEditor';
 import { BinaryBodyEditor } from './BinaryBodyEditor';
 import { GraphQLEditor } from './GraphQLEditor';
 import { fetchOAuth2Token, buildAuthorizationUrl, isTokenExpired } from '../utils/oauth';
-import { resolveVariables } from '../utils/http';
+import { resolveOAuth2Variables } from '../utils/http';
 
 type RequestTabType = 'params' | 'headers' | 'body' | 'auth';
 
@@ -226,6 +226,10 @@ function AuthEditor({ request }: { request: RequestConfig }) {
   ];
 
   const updateAuth = (updates: Partial<RequestConfig['auth']>) => {
+    if (updates.type && updates.type !== request.auth.type) {
+      setTokenError(null);
+      setAuthCode('');
+    }
     updateRequest(request.id, {
       auth: { ...request.auth, ...updates },
     });
@@ -489,7 +493,7 @@ function AuthEditor({ request }: { request: RequestConfig }) {
               {/* Get Authorization Code button */}
               <button
                 onClick={() => {
-                  const cfg = resolveOAuth2Config(
+                  const cfg = resolveOAuth2Variables(
                     { ...defaultOAuth2Config(), ...request.auth.oauth2 },
                     getActiveVariables(),
                   );
@@ -554,7 +558,7 @@ function AuthEditor({ request }: { request: RequestConfig }) {
                 setTokenLoading(true);
                 try {
                   const raw = { ...defaultOAuth2Config(), ...request.auth.oauth2 };
-                  const cfg = resolveOAuth2Config(raw, getActiveVariables());
+                  const cfg = resolveOAuth2Variables(raw, getActiveVariables());
                   const token = await fetchOAuth2Token(
                     cfg,
                     cfg.grantType === 'authorization_code' ? authCode : undefined,
@@ -612,17 +616,3 @@ function defaultOAuth2Config(): import('../types').OAuth2Config {
   };
 }
 
-function resolveOAuth2Config(
-  cfg: import('../types').OAuth2Config,
-  vars: Record<string, string>,
-): import('../types').OAuth2Config {
-  return {
-    ...cfg,
-    authUrl: resolveVariables(cfg.authUrl, vars),
-    tokenUrl: resolveVariables(cfg.tokenUrl, vars),
-    clientId: resolveVariables(cfg.clientId, vars),
-    clientSecret: resolveVariables(cfg.clientSecret, vars),
-    scope: resolveVariables(cfg.scope, vars),
-    callbackUrl: resolveVariables(cfg.callbackUrl, vars),
-  };
-}
