@@ -508,6 +508,18 @@ describe('parseCurlCommand', () => {
     const result = parseCurlCommand("curl myservice -X GET");
     expect(result.url).toBe('myservice');
   });
+
+  it('handles --request long flag without treating its arg as URL', () => {
+    const result = parseCurlCommand("curl --request POST https://api.example.com/graphql");
+    expect(result.url).toBe('https://api.example.com/graphql');
+    expect(result.method).toBe('POST');
+  });
+
+  it('handles --request with scheme-less URL', () => {
+    const result = parseCurlCommand("curl --request POST api/graphql -d '{\"query\":\"{ hello }\"}'");
+    expect(result.url).toBe('api/graphql');
+    expect(result.method).toBe('POST');
+  });
 });
 
 // ─── generateCurlCommand ────────────────────────────────────────────────────

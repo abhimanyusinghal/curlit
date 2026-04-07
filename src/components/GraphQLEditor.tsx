@@ -13,27 +13,34 @@ import { useAppStore } from '../store';
 import type { Theme } from '../store';
 import { buildUrl, buildHeaders, resolveVariables } from '../utils/http';
 
-/** Build the fully resolved endpoint URL for cache-keying and introspection. */
+/** Build the fully resolved endpoint URL for cache-keying and introspection.
+ *  Returns null when the URL is empty or unresolvable. */
 function resolveEndpoint(
   request: { url: string; params: { key: string; value: string; enabled: boolean }[]; auth: { type: string; apiKey?: { key: string; value: string; addTo: string } } },
   envVars: Record<string, string>,
-): string {
-  const resolvedUrl = resolveVariables(request.url, envVars);
+): string | null {
+  const resolvedUrl = resolveVariables(request.url, envVars).trim();
+  if (!resolvedUrl) return null;
   const resolvedParams = request.params.map(p => ({
     ...p,
     key: resolveVariables(p.key, envVars),
     value: resolveVariables(p.value, envVars),
   }));
-  let url = buildUrl(resolvedUrl, resolvedParams);
-  if (request.auth.type === 'api-key' && request.auth.apiKey?.addTo === 'query') {
-    const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
-    urlObj.searchParams.append(
-      resolveVariables(request.auth.apiKey.key, envVars),
-      resolveVariables(request.auth.apiKey.value, envVars),
-    );
-    url = urlObj.toString();
+  try {
+    let url = buildUrl(resolvedUrl, resolvedParams);
+    if (request.auth.type === 'api-key' && request.auth.apiKey?.addTo === 'query') {
+      const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+      urlObj.searchParams.append(
+        resolveVariables(request.auth.apiKey.key, envVars),
+        resolveVariables(request.auth.apiKey.value, envVars),
+      );
+      url = urlObj.toString();
+    }
+    return url;
+  } catch {
+    // URL is incomplete / unparseable — not an error, just not ready yet
+    return null;
   }
-  return url;
 }
 import { RefreshCw, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
 
@@ -57,22 +64,24 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [showSchema, setShowSchema] = useState(false);
   const [variablesHeight, setVariablesHeight] = useState(100);
-  const prevResolvedRef = useRef<string | undefined>();
+  const prevResolvedRef = useRef<string | null>(null);
   const activeEnvironmentId = useAppStore(s => s.activeEnvironmentId);
+  // Subscribe to the environments array so edits to variable values trigger re-evaluation
+  const environments = useAppStore(s => s.environments);
 
   // Sync schema from cache when the resolved endpoint changes
-  // (covers URL edits, param changes, auth changes, and env switches)
+  // (covers URL edits, param changes, auth changes, env switches, AND env value edits)
   useEffect(() => {
     if (!request) return;
     const envVars = getActiveVariables();
     const resolved = resolveEndpoint(request, envVars);
     if (resolved !== prevResolvedRef.current) {
       prevResolvedRef.current = resolved;
-      const cached = schemaCache.get(resolved) ?? null;
+      const cached = resolved ? schemaCache.get(resolved) ?? null : null;
       setSchema(cached);
       if (!cached) setShowSchema(false);
     }
-  }, [request?.url, request?.params, request?.auth, activeEnvironmentId, getActiveVariables, request]);
+  }, [request?.url, request?.params, request?.auth, activeEnvironmentId, environments, getActiveVariables, request]);
 
   const graphqlExtension = useMemo(() => {
     return schema ? graphqlLang(schema) : graphqlLang();
@@ -109,6 +118,7 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
       };
 
       const finalUrl = resolveEndpoint(request, envVars);
+      if (!finalUrl) throw new Error('Could not resolve endpoint URL');
       const headers = buildHeaders(
         request.headers.map(h => ({
           ...h,

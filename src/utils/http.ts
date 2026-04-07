@@ -308,7 +308,7 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
     } else {
       // Fall back: grab the first non-flag argument after "curl", handling
       // scheme-less targets like localhost:4000, graphql:4000, api/graphql, etc.
-      const flagsWithArg = new Set(['-X', '-H', '-d', '-u', '-o', '-A', '-e', '-b', '-c', '--data', '--data-raw', '--data-binary', '--data-urlencode', '--header', '--user', '--output', '--user-agent', '--referer', '--cookie', '--cookie-jar', '--max-time', '--connect-timeout', '--retry']);
+      const flagsWithArg = new Set(['-X', '-H', '-d', '-u', '-o', '-A', '-e', '-b', '-c', '--request', '--data', '--data-raw', '--data-binary', '--data-urlencode', '--header', '--user', '--output', '--user-agent', '--referer', '--cookie', '--cookie-jar', '--max-time', '--connect-timeout', '--retry', '--url', '--proxy', '--cert', '--key', '--cacert']);
       const args = cleaned.replace(/^curl\s+/i, '');
       // Split respecting quoted strings
       const tokens: string[] = [];
@@ -330,8 +330,8 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
     }
   }
 
-  // Extract method
-  const methodMatch = cleaned.match(/-X\s+(\w+)/i);
+  // Extract method (-X or --request)
+  const methodMatch = cleaned.match(/(?:-X|--request)\s+(\w+)/i);
   if (methodMatch) {
     result.method = methodMatch[1].toUpperCase() as RequestConfig['method'];
   }
