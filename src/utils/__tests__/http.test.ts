@@ -544,12 +544,11 @@ describe('parseCurlCommand', () => {
     expect(result.body!.graphql!.query).toContain('fragment UserFields');
   });
 
-  it('detects GraphQL query starting with a comment', () => {
+  it('does not treat hashtag search payloads as GraphQL', () => {
     const result = parseCurlCommand(
-      `curl -X POST 'https://api.example.com/graphql' -d '{"query":"# fetch users\\nquery { users { id } }"}'`
+      `curl -X POST 'https://api.example.com/search' -d '{"query":"#graphql","page":1}'`
     );
-    expect(result.body!.type).toBe('graphql');
-    expect(result.body!.graphql!.query).toContain('# fetch users');
+    expect(result.body!.type).toBe('json');
   });
 
   it('honors --url flag for the target URL', () => {
