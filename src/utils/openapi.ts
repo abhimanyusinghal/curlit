@@ -890,7 +890,8 @@ function schemaToFormDataEntries(spec: OpenApiSpec, schema?: SchemaObject): Form
     })
     .map(([key, prop]) => {
       const resolvedProp = resolveSchemaRef(spec, prop);
-      const isBinary = resolvedProp.type === 'string' && resolvedProp.format === 'binary';
+      const propType = resolveSchemaType(resolvedProp);
+      const isBinary = propType === 'string' && resolvedProp.format === 'binary';
       const example = isBinary ? undefined : generateSchemaExample(spec, resolvedProp, new Set());
       return createFormDataEntry({
         key,
