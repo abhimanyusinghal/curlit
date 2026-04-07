@@ -532,7 +532,9 @@ function AuthEditor({ request }: { request: RequestConfig }) {
                   : 'Token active'}
               </span>
               <span className="text-xs text-dark-400 font-mono ml-auto truncate max-w-[200px]">
-                {request.auth.oauth2.token.accessToken.substring(0, 20)}...
+                {request.auth.oauth2.token.accessToken.length > 20
+                  ? `${request.auth.oauth2.token.accessToken.substring(0, 20)}...`
+                  : request.auth.oauth2.token.accessToken}
               </span>
             </div>
           )}

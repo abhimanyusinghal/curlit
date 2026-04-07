@@ -168,11 +168,17 @@ app.post('/api/oauth/token', async (req, res) => {
   if (!tokenUrl) {
     return res.status(400).json({ error: 'Token URL is required' });
   }
+  if (!grantType) {
+    return res.status(400).json({ error: 'Grant type is required' });
+  }
+  if (!clientId) {
+    return res.status(400).json({ error: 'Client ID is required' });
+  }
 
   try {
     const params = new URLSearchParams();
     params.append('grant_type', grantType);
-    params.append('client_id', clientId || '');
+    params.append('client_id', clientId);
 
     if (clientSecret) {
       params.append('client_secret', clientSecret);

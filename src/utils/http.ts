@@ -36,7 +36,8 @@ export function buildHeaders(headers: KeyValuePair[], auth: AuthConfig): Record<
     case 'oauth2':
       if (auth.oauth2?.token?.accessToken) {
         const tokenType = auth.oauth2.token.tokenType || 'Bearer';
-        const prefix = tokenType.charAt(0).toUpperCase() + tokenType.slice(1).toLowerCase();
+        // Normalize common "bearer" casing; preserve everything else (e.g. "MAC", "DPoP")
+        const prefix = tokenType.toLowerCase() === 'bearer' ? 'Bearer' : tokenType;
         result['Authorization'] = `${prefix} ${auth.oauth2.token.accessToken}`;
       }
       break;
@@ -183,6 +184,7 @@ function resolveAuthVariables(auth: AuthConfig, variables: Record<string, string
       clientSecret: resolveVariables(resolved.oauth2.clientSecret, variables),
       scope: resolveVariables(resolved.oauth2.scope, variables),
       callbackUrl: resolveVariables(resolved.oauth2.callbackUrl, variables),
+      state: resolved.oauth2.state ? resolveVariables(resolved.oauth2.state, variables) : undefined,
     };
   }
   return resolved;

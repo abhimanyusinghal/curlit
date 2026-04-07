@@ -116,8 +116,8 @@ describe('buildHeaders', () => {
     expect(result['Authorization']).toBe('Bearer oauth-tok-123');
   });
 
-  it('capitalizes token type for OAuth 2.0 header', () => {
-    const auth: AuthConfig = {
+  it('normalizes "bearer" casing but preserves other token types', () => {
+    const makeAuth = (tokenType: string): AuthConfig => ({
       type: 'oauth2',
       oauth2: {
         grantType: 'client_credentials',
@@ -127,11 +127,15 @@ describe('buildHeaders', () => {
         clientSecret: '',
         scope: '',
         callbackUrl: '',
-        token: { accessToken: 'tok', tokenType: 'mac' },
+        token: { accessToken: 'tok', tokenType },
       },
-    };
-    const result = buildHeaders([], auth);
-    expect(result['Authorization']).toBe('Mac tok');
+    });
+    // "bearer" variants all normalize to "Bearer"
+    expect(buildHeaders([], makeAuth('bearer'))['Authorization']).toBe('Bearer tok');
+    expect(buildHeaders([], makeAuth('BEARER'))['Authorization']).toBe('Bearer tok');
+    // Non-bearer types are preserved as-is
+    expect(buildHeaders([], makeAuth('MAC'))['Authorization']).toBe('MAC tok');
+    expect(buildHeaders([], makeAuth('DPoP'))['Authorization']).toBe('DPoP tok');
   });
 
   it('does not add Authorization when oauth2 has no token', () => {

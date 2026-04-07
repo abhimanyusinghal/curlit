@@ -176,6 +176,38 @@ describe('fetchOAuth2Token', () => {
     await expect(fetchOAuth2Token(config)).rejects.toThrow('OAuth error: The code has expired');
   });
 
+  it('throws when response is missing access_token', async () => {
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ token_type: 'Bearer', expires_in: 3600 }),
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse as Response);
+
+    await expect(fetchOAuth2Token(makeConfig())).rejects.toThrow('OAuth error: response missing access_token');
+  });
+
+  it('only sends code and redirectUri for authorization_code grant', async () => {
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ access_token: 'tok' }),
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse as Response);
+
+    // client_credentials should NOT include code or redirectUri
+    await fetchOAuth2Token(makeConfig({ grantType: 'client_credentials' }));
+    const ccBody = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
+    expect(ccBody.code).toBeUndefined();
+    expect(ccBody.redirectUri).toBeUndefined();
+
+    // authorization_code should include them
+    await fetchOAuth2Token(makeConfig({ grantType: 'authorization_code' }), 'my-code');
+    const acBody = JSON.parse((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body as string);
+    expect(acBody.code).toBe('my-code');
+    expect(acBody.redirectUri).toBe('https://localhost/callback');
+  });
+
   it('defaults tokenType to Bearer when not provided', async () => {
     const mockResponse = {
       ok: true,

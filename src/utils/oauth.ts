@@ -8,18 +8,25 @@ export async function fetchOAuth2Token(
   config: OAuth2Config,
   authorizationCode?: string,
 ): Promise<OAuth2Token> {
+  const payload: Record<string, string | undefined> = {
+    tokenUrl: config.tokenUrl,
+    grantType: config.grantType,
+    clientId: config.clientId,
+    clientSecret: config.clientSecret,
+    scope: config.scope,
+  };
+
+  if (config.grantType === 'authorization_code') {
+    payload.code = authorizationCode;
+    if (config.callbackUrl) {
+      payload.redirectUri = config.callbackUrl;
+    }
+  }
+
   const response = await fetch('/api/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      tokenUrl: config.tokenUrl,
-      grantType: config.grantType,
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
-      code: authorizationCode,
-      redirectUri: config.callbackUrl,
-      scope: config.scope,
-    }),
+    body: JSON.stringify(payload),
   });
 
   const data = await response.json();
@@ -31,6 +38,10 @@ export async function fetchOAuth2Token(
 
   if (!response.ok) {
     throw new Error(`Token request failed with status ${response.status}`);
+  }
+
+  if (!data.access_token) {
+    throw new Error('OAuth error: response missing access_token');
   }
 
   return {
