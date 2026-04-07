@@ -15,7 +15,7 @@ export interface FormDataEntry extends KeyValuePair {
   fileType?: string;
 }
 
-export type BodyType = 'none' | 'json' | 'text' | 'xml' | 'form-data' | 'x-www-form-urlencoded';
+export type BodyType = 'none' | 'json' | 'text' | 'xml' | 'form-data' | 'x-www-form-urlencoded' | 'binary';
 
 export type AuthType = 'none' | 'basic' | 'bearer' | 'api-key';
 
@@ -38,6 +38,11 @@ export interface RequestConfig {
     raw: string;
     formData: FormDataEntry[];
     urlencoded: KeyValuePair[];
+    binaryFile?: {
+      fileName: string;
+      fileSize: number;
+      fileType: string;
+    };
   };
   auth: AuthConfig;
 }

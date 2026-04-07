@@ -38,7 +38,9 @@ export function buildHeaders(headers: KeyValuePair[], auth: AuthConfig): Record<
   return result;
 }
 
-export function buildBody(request: RequestConfig): string | FormData | null {
+const BINARY_ENTRY_ID = '__binary__';
+
+export function buildBody(request: RequestConfig): string | FormData | File | null {
   if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return null;
 
   switch (request.body.type) {
@@ -66,6 +68,10 @@ export function buildBody(request: RequestConfig): string | FormData | null {
         params.append(f.key, f.value);
       });
       return params.toString();
+    }
+    case 'binary': {
+      const file = getFile(request.id, BINARY_ENTRY_ID);
+      return file ?? null;
     }
     default:
       return null;
@@ -168,6 +174,9 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
     headers['Content-Type'] = 'application/xml';
   } else if (request.body.type === 'x-www-form-urlencoded' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  } else if (request.body.type === 'binary' && !headers['Content-Type']) {
+    const file = getFile(request.id, BINARY_ENTRY_ID);
+    headers['Content-Type'] = file?.type || 'application/octet-stream';
   }
 
   // Add api-key to query params if configured
@@ -192,6 +201,23 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
       headers,
       bodyType: 'form-data',
       formDataEntries,
+    });
+  } else if (request.body.type === 'binary') {
+    const file = getFile(request.id, BINARY_ENTRY_ID);
+    if (!file) {
+      throw new Error(
+        request.body.binaryFile
+          ? `Binary file "${request.body.binaryFile.fileName}" is no longer in memory. Please re-select the file.`
+          : 'No binary file selected.',
+      );
+    }
+    const base64 = await fileToBase64(file);
+    proxyBody = JSON.stringify({
+      method: request.method,
+      url: finalUrl,
+      headers,
+      bodyType: 'binary',
+      binary: { base64, fileName: file.name, fileType: file.type || 'application/octet-stream' },
     });
   } else {
     proxyBody = JSON.stringify({
@@ -265,15 +291,29 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
     }
   }
 
-  // Extract data/body
-  const dataMatch = cleaned.match(/(?:-d|--data|--data-raw|--data-binary)\s+['"]([^'"]*)['"]/i);
-  if (dataMatch) {
+  // Extract data/body — check --data-binary '@file' first
+  const binaryFileMatch = cleaned.match(/--data-binary\s+['"]@([^'"]+)['"]/i);
+  if (binaryFileMatch) {
     if (!methodMatch) result.method = 'POST';
-    try {
-      JSON.parse(dataMatch[1]);
-      result.body = { type: 'json', raw: dataMatch[1], formData: [], urlencoded: [] };
-    } catch {
-      result.body = { type: 'text', raw: dataMatch[1], formData: [], urlencoded: [] };
+    const filePath = binaryFileMatch[1];
+    const fileName = filePath.split('/').pop() || filePath;
+    result.body = {
+      type: 'binary',
+      raw: '',
+      formData: [],
+      urlencoded: [],
+      binaryFile: { fileName, fileSize: 0, fileType: 'application/octet-stream' },
+    };
+  } else {
+    const dataMatch = cleaned.match(/(?:-d|--data|--data-raw|--data-binary)\s+['"]([^'"]*)['"]/i);
+    if (dataMatch) {
+      if (!methodMatch) result.method = 'POST';
+      try {
+        JSON.parse(dataMatch[1]);
+        result.body = { type: 'json', raw: dataMatch[1], formData: [], urlencoded: [] };
+      } catch {
+        result.body = { type: 'text', raw: dataMatch[1], formData: [], urlencoded: [] };
+      }
     }
   }
 
@@ -305,9 +345,13 @@ export function generateCurlCommand(request: RequestConfig): string {
   });
 
   if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.body.type !== 'none') {
-    const body = buildBody(request);
-    if (body && typeof body === 'string') {
-      parts.push(`-d '${body}'`);
+    if (request.body.type === 'binary' && request.body.binaryFile) {
+      parts.push(`--data-binary '@/path/to/${request.body.binaryFile.fileName}'`);
+    } else {
+      const body = buildBody(request);
+      if (body && typeof body === 'string') {
+        parts.push(`-d '${body}'`);
+      }
     }
   }
 
