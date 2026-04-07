@@ -12,6 +12,29 @@ import {
 import { useAppStore } from '../store';
 import type { Theme } from '../store';
 import { buildUrl, buildHeaders, resolveVariables } from '../utils/http';
+
+/** Build the fully resolved endpoint URL for cache-keying and introspection. */
+function resolveEndpoint(
+  request: { url: string; params: { key: string; value: string; enabled: boolean }[]; auth: { type: string; apiKey?: { key: string; value: string; addTo: string } } },
+  envVars: Record<string, string>,
+): string {
+  const resolvedUrl = resolveVariables(request.url, envVars);
+  const resolvedParams = request.params.map(p => ({
+    ...p,
+    key: resolveVariables(p.key, envVars),
+    value: resolveVariables(p.value, envVars),
+  }));
+  let url = buildUrl(resolvedUrl, resolvedParams);
+  if (request.auth.type === 'api-key' && request.auth.apiKey?.addTo === 'query') {
+    const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+    urlObj.searchParams.append(
+      resolveVariables(request.auth.apiKey.key, envVars),
+      resolveVariables(request.auth.apiKey.value, envVars),
+    );
+    url = urlObj.toString();
+  }
+  return url;
+}
 import { RefreshCw, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
 
 interface Props {
@@ -34,18 +57,22 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [showSchema, setShowSchema] = useState(false);
   const [variablesHeight, setVariablesHeight] = useState(100);
-  const prevUrlRef = useRef<string | undefined>();
+  const prevResolvedRef = useRef<string | undefined>();
+  const activeEnvironmentId = useAppStore(s => s.activeEnvironmentId);
 
-  // Sync schema from cache when URL changes
+  // Sync schema from cache when the resolved endpoint changes
+  // (covers URL edits, param changes, auth changes, and env switches)
   useEffect(() => {
-    const url = request?.url;
-    if (url !== prevUrlRef.current) {
-      prevUrlRef.current = url;
-      const cached = url ? schemaCache.get(url) : null;
-      setSchema(cached ?? null);
+    if (!request) return;
+    const envVars = getActiveVariables();
+    const resolved = resolveEndpoint(request, envVars);
+    if (resolved !== prevResolvedRef.current) {
+      prevResolvedRef.current = resolved;
+      const cached = schemaCache.get(resolved) ?? null;
+      setSchema(cached);
       if (!cached) setShowSchema(false);
     }
-  }, [request?.url]);
+  }, [request?.url, request?.params, request?.auth, activeEnvironmentId, getActiveVariables, request]);
 
   const graphqlExtension = useMemo(() => {
     return schema ? graphqlLang(schema) : graphqlLang();
@@ -65,14 +92,6 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
     try {
       // Resolve environment variables, params, and auth — same as sendRequest
       const envVars = getActiveVariables();
-      const resolvedUrl = resolveVariables(rawUrl, envVars);
-      const resolvedParams = request.params.map(p => ({
-        ...p,
-        key: resolveVariables(p.key, envVars),
-        value: resolveVariables(p.value, envVars),
-      }));
-      let finalUrl = buildUrl(resolvedUrl, resolvedParams);
-
       const resolvedAuth = {
         ...request.auth,
         basic: request.auth.basic ? {
@@ -89,6 +108,7 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
         } : undefined,
       };
 
+      const finalUrl = resolveEndpoint(request, envVars);
       const headers = buildHeaders(
         request.headers.map(h => ({
           ...h,
@@ -98,13 +118,6 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
         resolvedAuth,
       );
       headers['Content-Type'] = 'application/json';
-
-      // Append API key to query string if configured
-      if (resolvedAuth.type === 'api-key' && resolvedAuth.apiKey?.addTo === 'query') {
-        const urlObj = new URL(finalUrl.startsWith('http') ? finalUrl : `https://${finalUrl}`);
-        urlObj.searchParams.append(resolvedAuth.apiKey.key, resolvedAuth.apiKey.value);
-        finalUrl = urlObj.toString();
-      }
 
       const proxyUrl = finalUrl.startsWith('http') ? finalUrl : `https://${finalUrl}`;
 
@@ -134,7 +147,7 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
 
       const introspectionResult: IntrospectionQuery = body.data;
       const clientSchema = buildClientSchema(introspectionResult);
-      schemaCache.set(rawUrl, clientSchema);
+      schemaCache.set(finalUrl, clientSchema);
       setSchema(clientSchema);
       setShowSchema(true);
     } catch (err) {

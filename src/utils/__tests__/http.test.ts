@@ -218,6 +218,18 @@ describe('buildBody', () => {
     expect(parsed.extensions).toEqual({ persistedQuery: { sha256Hash: 'abc' } });
   });
 
+  it('omits query field from graphql body when query is empty (persisted queries)', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: '', variables: '', operationName: 'GetUser', extensions: '{"persistedQuery":{"sha256Hash":"abc"}}' } },
+    });
+    const result = buildBody(req);
+    const parsed = JSON.parse(result as string);
+    expect(parsed).not.toHaveProperty('query');
+    expect(parsed.operationName).toBe('GetUser');
+    expect(parsed.extensions).toEqual({ persistedQuery: { sha256Hash: 'abc' } });
+  });
+
   it('omits operationName and extensions when not set', () => {
     const req = createDefaultRequest({
       method: 'POST',
@@ -485,6 +497,16 @@ describe('parseCurlCommand', () => {
   it('extracts single-label host with port and path like api:8080/graphql', () => {
     const result = parseCurlCommand("curl api:8080/graphql -X POST");
     expect(result.url).toBe('api:8080/graphql');
+  });
+
+  it('extracts scheme-less path-only URL like api/graphql', () => {
+    const result = parseCurlCommand("curl api/graphql -d '{\"query\":\"{ hello }\"}'");
+    expect(result.url).toBe('api/graphql');
+  });
+
+  it('extracts single-label host without port like myservice', () => {
+    const result = parseCurlCommand("curl myservice -X GET");
+    expect(result.url).toBe('myservice');
   });
 });
 

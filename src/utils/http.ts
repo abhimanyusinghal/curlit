@@ -47,7 +47,10 @@ export function buildBody(request: RequestConfig): string | FormData | File | nu
     case 'none':
       return null;
     case 'graphql': {
-      const gql: Record<string, unknown> = { query: request.body.graphql?.query ?? '' };
+      const queryStr = request.body.graphql?.query ?? '';
+      const gql: Record<string, unknown> = {};
+      // Only include query when non-empty — persisted-query payloads omit it
+      if (queryStr) gql.query = queryStr;
       const varsStr = request.body.graphql?.variables?.trim();
       if (varsStr) {
         try {
@@ -303,10 +306,27 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
     if (bareUrl) {
       result.url = bareUrl[1];
     } else {
-      // Fall back: find a scheme-less URL (localhost, IPs, dotted hosts, or
-      // single-label hosts with a port like graphql:4000 or api:8080/path)
-      const schemeless = cleaned.match(/(?:^|\s)['"]?((?:localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|[\w.-]+\.\w{2,}|[\w-]+:\d+)(?::\d+)?(?:\/\S*)?)['"]?/i);
-      if (schemeless) result.url = schemeless[1];
+      // Fall back: grab the first non-flag argument after "curl", handling
+      // scheme-less targets like localhost:4000, graphql:4000, api/graphql, etc.
+      const flagsWithArg = new Set(['-X', '-H', '-d', '-u', '-o', '-A', '-e', '-b', '-c', '--data', '--data-raw', '--data-binary', '--data-urlencode', '--header', '--user', '--output', '--user-agent', '--referer', '--cookie', '--cookie-jar', '--max-time', '--connect-timeout', '--retry']);
+      const args = cleaned.replace(/^curl\s+/i, '');
+      // Split respecting quoted strings
+      const tokens: string[] = [];
+      const tokenRegex = /'([^']*)'|"([^"]*)"|(\S+)/g;
+      let m;
+      while ((m = tokenRegex.exec(args)) !== null) {
+        tokens.push(m[1] ?? m[2] ?? m[3]);
+      }
+      for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        // Skip flags and their arguments
+        if (t.startsWith('-')) {
+          if (flagsWithArg.has(t)) i++; // skip next token (the flag's value)
+          continue;
+        }
+        result.url = t;
+        break;
+      }
     }
   }
 
