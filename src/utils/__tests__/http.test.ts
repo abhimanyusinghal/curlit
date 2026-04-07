@@ -240,6 +240,72 @@ describe('buildBody', () => {
     expect(parsed).not.toHaveProperty('operationName');
     expect(parsed).not.toHaveProperty('extensions');
   });
+
+  it('handles deeply nested variables in graphql body', () => {
+    const vars = '{"input":{"user":{"address":{"city":"NYC","zip":"10001"},"tags":["admin","active"]}}}';
+    const req = createDefaultRequest({
+      method: 'POST',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: 'mutation ($input: CreateUserInput!) { createUser(input: $input) { id } }', variables: vars } },
+    });
+    const result = buildBody(req);
+    const parsed = JSON.parse(result as string);
+    expect(parsed.variables.input.user.address.city).toBe('NYC');
+    expect(parsed.variables.input.user.tags).toEqual(['admin', 'active']);
+  });
+
+  it('handles array variables in graphql body', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: 'query ($ids: [ID!]!) { users(ids: $ids) { name } }', variables: '{"ids":["1","2","3"]}' } },
+    });
+    const result = buildBody(req);
+    const parsed = JSON.parse(result as string);
+    expect(parsed.variables.ids).toEqual(['1', '2', '3']);
+  });
+
+  it('handles empty variables object string', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: '{ users { id } }', variables: '{}' } },
+    });
+    const result = buildBody(req);
+    const parsed = JSON.parse(result as string);
+    expect(parsed.variables).toEqual({});
+  });
+
+  it('handles variables with unicode and special characters', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: 'query ($name: String!) { user(name: $name) { id } }', variables: '{"name":"José García 日本語"}' } },
+    });
+    const result = buildBody(req);
+    const parsed = JSON.parse(result as string);
+    expect(parsed.variables.name).toBe('José García 日本語');
+  });
+
+  it('handles query with directives', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: 'query ($withEmail: Boolean!) { users { id name email @include(if: $withEmail) } }', variables: '{"withEmail":true}' } },
+    });
+    const result = buildBody(req);
+    const parsed = JSON.parse(result as string);
+    expect(parsed.query).toContain('@include(if: $withEmail)');
+    expect(parsed.variables.withEmail).toBe(true);
+  });
+
+  it('handles multi-operation document with operationName', () => {
+    const query = 'query GetUser { user { id } } query GetUsers { users { id } }';
+    const req = createDefaultRequest({
+      method: 'POST',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query, variables: '', operationName: 'GetUsers' } },
+    });
+    const result = buildBody(req);
+    const parsed = JSON.parse(result as string);
+    expect(parsed.query).toContain('GetUser');
+    expect(parsed.query).toContain('GetUsers');
+    expect(parsed.operationName).toBe('GetUsers');
+  });
 });
 
 // ─── resolveVariables ────────────────────────────────────────────────────────
@@ -314,6 +380,47 @@ describe('resolveRequestVariables', () => {
     const resolved = resolveRequestVariables(req, vars);
     expect(resolved.body.graphql!.query).toBe('{ user(token: "abc123") { name } }');
     expect(resolved.body.graphql!.variables).toBe('{"host": "api.test"}');
+  });
+
+  it('resolves variables in graphql operationName and extensions', () => {
+    const req = createDefaultRequest({
+      url: 'https://{{host}}/graphql',
+      body: {
+        type: 'graphql',
+        raw: '',
+        formData: [],
+        urlencoded: [],
+        graphql: {
+          query: 'query {{user}} { user { id } }',
+          variables: '{"token": "{{token}}"}',
+          operationName: '{{user}}',
+          extensions: '{"key": "{{apikey}}"}',
+        },
+      },
+    });
+    const resolved = resolveRequestVariables(req, vars);
+    expect(resolved.body.graphql!.operationName).toBe('admin');
+    expect(resolved.body.graphql!.extensions).toBe('{"key": "key1"}');
+  });
+
+  it('resolves variables inside nested graphql variable JSON strings', () => {
+    const req = createDefaultRequest({
+      url: 'https://{{host}}/graphql',
+      body: {
+        type: 'graphql',
+        raw: '',
+        formData: [],
+        urlencoded: [],
+        graphql: {
+          query: 'mutation { create(input: $input) { id } }',
+          variables: '{"input":{"endpoint":"https://{{host}}/callback","token":"{{token}}"}}',
+        },
+      },
+    });
+    const resolved = resolveRequestVariables(req, vars);
+    const parsedVars = JSON.parse(resolved.body.graphql!.variables);
+    expect(parsedVars.input.endpoint).toBe('https://api.test/callback');
+    expect(parsedVars.input.token).toBe('abc123');
   });
 
   it('preserves undefined graphql field when not set', () => {
@@ -576,6 +683,49 @@ describe('parseCurlCommand', () => {
     expect(result.url).toBe('https://api.example.com/graphql');
     expect(result.method).toBe('POST');
   });
+
+  it('parses multi-line GraphQL cURL with line continuations', () => {
+    const curl = `curl -X POST \\\n  'https://api.example.com/graphql' \\\n  -H 'Content-Type: application/json' \\\n  -d '{"query":"query GetUser($id: ID!) { user(id: $id) { name email } }","variables":{"id":"42"}}'`;
+    const result = parseCurlCommand(curl);
+    expect(result.url).toBe('https://api.example.com/graphql');
+    expect(result.method).toBe('POST');
+    expect(result.body!.type).toBe('graphql');
+    expect(result.body!.graphql!.query).toContain('GetUser');
+    expect(JSON.parse(result.body!.graphql!.variables)).toEqual({ id: '42' });
+  });
+
+  it('detects subscription keyword as GraphQL', () => {
+    const result = parseCurlCommand(
+      `curl -X POST 'https://api.example.com/graphql' -d '{"query":"subscription { onMessageAdded { id text sender } }"}'`
+    );
+    expect(result.body!.type).toBe('graphql');
+    expect(result.body!.graphql!.query).toContain('subscription');
+  });
+
+  it('handles --data-raw with GraphQL body', () => {
+    const result = parseCurlCommand(
+      `curl -X POST 'https://api.example.com/graphql' --data-raw '{"query":"{ users { id } }"}'`
+    );
+    expect(result.body!.type).toBe('graphql');
+  });
+
+  it('handles double-quoted -d with GraphQL body', () => {
+    const result = parseCurlCommand(
+      `curl -X POST "https://api.example.com/graphql" -d "{\\"query\\":\\"{ users { id } }\\"}" `
+    );
+    // double-quoted JSON with escaped inner quotes
+    expect(result.url).toBe('https://api.example.com/graphql');
+  });
+
+  it('parses complex nested variables in cURL import', () => {
+    const curl = `curl -X POST 'https://api.example.com/graphql' -d '{"query":"mutation ($input: CreateInput!) { create(input: $input) { id } }","variables":{"input":{"name":"Alice","roles":["admin","user"],"profile":{"age":30,"address":{"city":"NYC"}}}}}'`;
+    const result = parseCurlCommand(curl);
+    expect(result.body!.type).toBe('graphql');
+    const vars = JSON.parse(result.body!.graphql!.variables);
+    expect(vars.input.name).toBe('Alice');
+    expect(vars.input.roles).toEqual(['admin', 'user']);
+    expect(vars.input.profile.address.city).toBe('NYC');
+  });
 });
 
 // ─── generateCurlCommand ────────────────────────────────────────────────────
@@ -684,6 +834,36 @@ describe('generateCurlCommand', () => {
     const result = generateCurlCommand(req);
     expect(result).toContain("-H 'Content-Type: application/graphql+json'");
     expect(result).not.toContain("application/json");
+  });
+
+  it('exports persisted query without query field', () => {
+    const req = createDefaultRequest({
+      method: 'POST',
+      url: 'https://api.example.com/graphql',
+      body: { type: 'graphql', raw: '', formData: [], urlencoded: [], graphql: { query: '', variables: '', operationName: 'GetUser', extensions: '{"persistedQuery":{"sha256Hash":"abc"}}' } },
+    });
+    const result = generateCurlCommand(req);
+    const dMatch = result.match(/-d '([^']*)'/);
+    expect(dMatch).toBeTruthy();
+    const parsed = JSON.parse(dMatch![1]);
+    expect(parsed).not.toHaveProperty('query');
+    expect(parsed.operationName).toBe('GetUser');
+    expect(parsed.extensions).toEqual({ persistedQuery: { sha256Hash: 'abc' } });
+  });
+
+  it('round-trips GraphQL cURL: import → export preserves query and variables', () => {
+    const originalCurl = `curl -X POST 'https://api.example.com/graphql' -H 'Content-Type: application/json' -d '{"query":"query GetUser($id: ID!) { user(id: $id) { name } }","variables":{"id":"42"}}'`;
+    const imported = parseCurlCommand(originalCurl);
+    const fullRequest = createDefaultRequest({
+      ...imported,
+      name: 'test',
+    });
+    const exported = generateCurlCommand(fullRequest);
+    // Re-import the exported cURL and verify the GraphQL payload survived
+    const reimported = parseCurlCommand(exported);
+    expect(reimported.body!.type).toBe('graphql');
+    expect(reimported.body!.graphql!.query).toContain('query GetUser');
+    expect(JSON.parse(reimported.body!.graphql!.variables)).toEqual({ id: '42' });
   });
 });
 
