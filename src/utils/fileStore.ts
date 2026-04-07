@@ -20,6 +20,13 @@ export function removeFile(requestId: string, entryId: string): void {
   files.delete(fileKey(requestId, entryId));
 }
 
+export function removeFilesForRequest(requestId: string): void {
+  const prefix = `${requestId}:`;
+  for (const key of files.keys()) {
+    if (key.startsWith(prefix)) files.delete(key);
+  }
+}
+
 export function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

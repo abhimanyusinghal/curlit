@@ -17,7 +17,7 @@ function buildMultipartBody(entries) {
   const parts = [];
 
   for (const entry of entries) {
-    if (entry.type === 'file' && entry.base64) {
+    if (entry.type === 'file' && entry.base64 != null) {
       const fileBuffer = Buffer.from(entry.base64, 'base64');
       const fileName = entry.fileName || 'file';
       const contentType = entry.contentType || 'application/octet-stream';

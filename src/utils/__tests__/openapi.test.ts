@@ -849,6 +849,42 @@ describe('parseOpenApiSpec - request body', () => {
     expect(result.requests[0].body.formData[1].valueType).toBe('text');
   });
 
+  it('detects binary fields in OAS3 multipart/form-data as file entries', () => {
+    const result = parseOpenApiSpec({
+      openapi: '3.0.0',
+      info: { title: 'API', version: '1.0' },
+      paths: {
+        '/upload': {
+          post: {
+            requestBody: {
+              content: {
+                'multipart/form-data': {
+                  schema: {
+                    type: 'object',
+                    required: ['file'],
+                    properties: {
+                      file: { type: 'string', format: 'binary' },
+                      description: { type: 'string', example: 'My file' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.requests[0].body.type).toBe('form-data');
+    expect(result.requests[0].body.formData).toHaveLength(2);
+    expect(result.requests[0].body.formData[0].key).toBe('file');
+    expect(result.requests[0].body.formData[0].valueType).toBe('file');
+    expect(result.requests[0].body.formData[0].value).toBe('');
+    expect(result.requests[0].body.formData[1].key).toBe('description');
+    expect(result.requests[0].body.formData[1].valueType).toBe('text');
+    expect(result.requests[0].body.formData[1].value).toBe('My file');
+  });
+
   it('skips readOnly properties in body', () => {
     const result = parseOpenApiSpec({
       openapi: '3.0.0',
