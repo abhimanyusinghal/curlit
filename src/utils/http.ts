@@ -204,23 +204,21 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
     });
   } else if (request.body.type === 'binary') {
     const file = getFile(request.id, BINARY_ENTRY_ID);
-    if (file) {
-      const base64 = await fileToBase64(file);
-      proxyBody = JSON.stringify({
-        method: request.method,
-        url: finalUrl,
-        headers,
-        bodyType: 'binary',
-        binary: { base64, fileName: file.name, fileType: file.type || 'application/octet-stream' },
-      });
-    } else {
-      proxyBody = JSON.stringify({
-        method: request.method,
-        url: finalUrl,
-        headers,
-        bodyType: 'binary',
-      });
+    if (!file) {
+      throw new Error(
+        request.body.binaryFile
+          ? `Binary file "${request.body.binaryFile.fileName}" is no longer in memory. Please re-select the file.`
+          : 'No binary file selected.',
+      );
     }
+    const base64 = await fileToBase64(file);
+    proxyBody = JSON.stringify({
+      method: request.method,
+      url: finalUrl,
+      headers,
+      bodyType: 'binary',
+      binary: { base64, fileName: file.name, fileType: file.type || 'application/octet-stream' },
+    });
   } else {
     proxyBody = JSON.stringify({
       method: request.method,
@@ -334,7 +332,7 @@ export function generateCurlCommand(request: RequestConfig): string {
 
   if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.body.type !== 'none') {
     if (request.body.type === 'binary' && request.body.binaryFile) {
-      parts.push(`--data-binary '@${request.body.binaryFile.fileName}'`);
+      parts.push(`--data-binary '@/path/to/${request.body.binaryFile.fileName}'`);
     } else {
       const body = buildBody(request);
       if (body && typeof body === 'string') {

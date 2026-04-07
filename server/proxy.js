@@ -59,7 +59,7 @@ app.post('/api/proxy', async (req, res) => {
 
     // Set body for methods that support it
     if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-      if (bodyType === 'binary' && binary?.base64) {
+      if (bodyType === 'binary' && binary?.base64 != null) {
         fetchOptions.body = Buffer.from(binary.base64, 'base64');
         if (!fetchOptions.headers['Content-Type']) {
           fetchOptions.headers['Content-Type'] = binary.fileType || 'application/octet-stream';
