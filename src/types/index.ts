@@ -30,6 +30,8 @@ export interface OAuth2Token {
   obtainedAt?: number;
 }
 
+export type OAuth2ClientAuth = 'post' | 'basic';
+
 export interface OAuth2Config {
   grantType: OAuth2GrantType;
   authUrl: string;
@@ -38,6 +40,7 @@ export interface OAuth2Config {
   clientSecret: string;
   scope: string;
   callbackUrl: string;
+  clientAuthMethod?: OAuth2ClientAuth;
   state?: string;
   token?: OAuth2Token;
 }

@@ -7,13 +7,16 @@ import type { OAuth2Config, OAuth2Token } from '../types';
 export async function fetchOAuth2Token(
   config: OAuth2Config,
   authorizationCode?: string,
+  sslVerification?: boolean,
 ): Promise<OAuth2Token> {
-  const payload: Record<string, string | undefined> = {
+  const payload: Record<string, string | boolean | undefined> = {
     tokenUrl: config.tokenUrl,
     grantType: config.grantType,
     clientId: config.clientId,
     clientSecret: config.clientSecret,
     scope: config.scope,
+    sslVerification: sslVerification !== false,
+    clientAuthMethod: config.clientAuthMethod || 'post',
   };
 
   if (config.grantType === 'authorization_code') {

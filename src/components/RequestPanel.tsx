@@ -463,6 +463,23 @@ function AuthEditor({ request }: { request: RequestConfig }) {
             />
           </label>
 
+          {/* Client Auth Method */}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-dark-300 font-medium">Client Authentication</span>
+            <select
+              value={request.auth.oauth2?.clientAuthMethod || 'post'}
+              onChange={e =>
+                updateAuth({
+                  oauth2: { ...defaultOAuth2Config(), ...request.auth.oauth2, clientAuthMethod: e.target.value as 'post' | 'basic' },
+                })
+              }
+              className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 cursor-pointer"
+            >
+              <option value="post">Send in body (client_secret_post)</option>
+              <option value="basic">Send as Basic Auth header (client_secret_basic)</option>
+            </select>
+          </label>
+
           {/* Scope */}
           <label className="flex flex-col gap-1">
             <span className="text-xs text-dark-300 font-medium">Scope</span>
@@ -569,6 +586,7 @@ function AuthEditor({ request }: { request: RequestConfig }) {
                   const token = await fetchOAuth2Token(
                     cfg,
                     cfg.grantType === 'authorization_code' ? authCode : undefined,
+                    request.sslVerification,
                   );
                   updateAuth({ oauth2: { ...raw, token } });
                   setAuthCode('');

@@ -431,11 +431,20 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
     };
   }
 
+  // Detect --insecure / -k flag
+  if (/(?:^|\s)(?:--insecure|-k)(?:\s|$)/.test(cleaned)) {
+    result.sslVerification = false;
+  }
+
   return result;
 }
 
 export function generateCurlCommand(request: RequestConfig): string {
   const parts: string[] = ['curl'];
+
+  if (request.sslVerification === false) {
+    parts.push('--insecure');
+  }
 
   if (request.method !== 'GET') {
     parts.push(`-X ${request.method}`);

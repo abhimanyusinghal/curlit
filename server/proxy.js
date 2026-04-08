@@ -169,7 +169,7 @@ app.post('/api/proxy', async (req, res) => {
  * Handles both authorization_code and client_credentials grant types.
  */
 app.post('/api/oauth/token', async (req, res) => {
-  const { tokenUrl, grantType, clientId, clientSecret, code, redirectUri, scope } = req.body;
+  const { tokenUrl, grantType, clientId, clientSecret, code, redirectUri, scope, sslVerification, clientAuthMethod } = req.body;
 
   if (!tokenUrl) {
     return res.status(400).json({ error: 'Token URL is required' });
@@ -184,10 +184,19 @@ app.post('/api/oauth/token', async (req, res) => {
   try {
     const params = new URLSearchParams();
     params.append('grant_type', grantType);
-    params.append('client_id', clientId);
 
-    if (clientSecret) {
-      params.append('client_secret', clientSecret);
+    const fetchHeaders = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+    if (clientAuthMethod === 'basic' && clientSecret) {
+      // client_secret_basic: send credentials via Authorization header
+      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      fetchHeaders['Authorization'] = `Basic ${credentials}`;
+    } else {
+      // client_secret_post (default): send credentials in body
+      params.append('client_id', clientId);
+      if (clientSecret) {
+        params.append('client_secret', clientSecret);
+      }
     }
 
     if (grantType === 'authorization_code') {
@@ -199,11 +208,17 @@ app.post('/api/oauth/token', async (req, res) => {
       params.append('scope', scope);
     }
 
-    const response = await fetch(tokenUrl, {
+    const fetchOptions = {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: fetchHeaders,
       body: params.toString(),
-    });
+    };
+
+    if (sslVerification === false) {
+      fetchOptions.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+    }
+
+    const response = await fetch(tokenUrl, fetchOptions);
 
     const text = await response.text();
     const contentType = response.headers.get('content-type') || '';
