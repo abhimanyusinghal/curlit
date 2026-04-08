@@ -263,6 +263,7 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
       headers,
       bodyType: 'form-data',
       formDataEntries,
+      sslVerification: request.sslVerification !== false,
     });
   } else if (request.body.type === 'binary') {
     const file = getFile(request.id, BINARY_ENTRY_ID);
@@ -280,6 +281,7 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
       headers,
       bodyType: 'binary',
       binary: { base64, fileName: file.name, fileType: file.type || 'application/octet-stream' },
+      sslVerification: request.sslVerification !== false,
     });
   } else {
     proxyBody = JSON.stringify({
@@ -288,6 +290,7 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
       headers,
       body: body instanceof FormData ? Object.fromEntries(body) : body,
       bodyType: request.body.type,
+      sslVerification: request.sslVerification !== false,
     });
   }
 

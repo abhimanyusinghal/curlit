@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import { Agent } from 'undici';
 
 const app = express();
 const PORT = 3001;
@@ -45,7 +46,7 @@ function buildMultipartBody(entries) {
 }
 
 app.post('/api/proxy', async (req, res) => {
-  const { method, url, headers, body, bodyType, formDataEntries, binary } = req.body;
+  const { method, url, headers, body, bodyType, formDataEntries, binary, sslVerification } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: 'URL is required' });
@@ -84,6 +85,11 @@ app.post('/api/proxy', async (req, res) => {
       } else if (body) {
         fetchOptions.body = JSON.stringify(body);
       }
+    }
+
+    // When SSL verification is disabled, use a custom undici Agent that skips cert checks
+    if (sslVerification === false) {
+      fetchOptions.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
     }
 
     const startTime = Date.now();

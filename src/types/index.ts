@@ -75,6 +75,7 @@ export interface RequestConfig {
     };
   };
   auth: AuthConfig;
+  sslVerification?: boolean;
 }
 
 export interface ResponseData {
