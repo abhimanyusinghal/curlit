@@ -44,7 +44,8 @@
 - [x] File upload support in Form Data body type
 - [x] Binary body support
 - [x] GraphQL mode with query/variables editor and schema introspection
-- [ ] OAuth 2.0 authentication flow (authorization code, client credentials)
+- [x] OAuth 2.0 authentication flow (authorization code, client credentials)
+- [x] SSL certificate verification toggle (disable per-request, like Postman's "SSL verification" setting)
 - [ ] Pre-request scripts (JavaScript, runs before send)
 - [ ] Post-response tests (assertions on status, body, headers)
 - [ ] Request chaining -- use values from one response in the next request

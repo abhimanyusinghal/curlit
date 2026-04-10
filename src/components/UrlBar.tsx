@@ -1,4 +1,4 @@
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, ShieldCheck, ShieldOff } from 'lucide-react';
 import type { HttpMethod, RequestConfig } from '../types';
 import { useAppStore } from '../store';
 import { sendRequest, resolveRequestVariables } from '../utils/http';
@@ -79,6 +79,19 @@ export function UrlBar({ request }: Props) {
         placeholder="Enter URL or paste cURL command..."
         className="flex-1 bg-dark-700 border border-dark-500 rounded-lg px-4 py-2.5 text-sm text-dark-100 placeholder:text-dark-400 font-mono"
       />
+
+      {/* SSL Verification Toggle */}
+      <button
+        onClick={() => updateRequest(request.id, { sslVerification: request.sslVerification === false ? true : false })}
+        title={request.sslVerification === false ? 'SSL verification disabled — click to enable' : 'SSL verification enabled — click to disable'}
+        className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
+          request.sslVerification === false
+            ? 'bg-yellow-900/30 border-yellow-600/50 text-yellow-400 hover:bg-yellow-900/50'
+            : 'bg-dark-700 border-dark-500 text-dark-400 hover:text-dark-200'
+        }`}
+      >
+        {request.sslVerification === false ? <ShieldOff size={16} /> : <ShieldCheck size={16} />}
+      </button>
 
       {/* Send Button */}
       <button

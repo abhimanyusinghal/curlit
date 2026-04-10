@@ -223,6 +223,9 @@ interface SecurityScheme {
   bearerFormat?: string;
   flow?: string;                   // Swagger 2.0
   flows?: OAuthFlows;              // OpenAPI 3.x
+  authorizationUrl?: string;       // Swagger 2.0 (flat on scheme)
+  tokenUrl?: string;               // Swagger 2.0 (flat on scheme)
+  scopes?: Record<string, string>; // Swagger 2.0 (flat on scheme)
   openIdConnectUrl?: string;
 }
 
@@ -1180,13 +1183,14 @@ function extractAuth(spec: OpenApiSpec, operation: Operation): AuthConfig {
     if (!rawScheme) continue;
 
     const scheme = resolveSecuritySchemeRef(spec, rawScheme as SecuritySchemeOrRef);
-    return convertSecurityScheme(scheme);
+    const requiredScopes = req[schemeName]; // undefined if absent, [] if explicitly empty
+    return convertSecurityScheme(scheme, requiredScopes);
   }
 
   return { type: 'none' };
 }
 
-function convertSecurityScheme(scheme: SecurityScheme): AuthConfig {
+function convertSecurityScheme(scheme: SecurityScheme, requiredScopes?: string[]): AuthConfig {
   // OpenAPI 3.x "http" type
   if (scheme.type === 'http') {
     if (scheme.scheme?.toLowerCase() === 'basic') {
@@ -1216,8 +1220,82 @@ function convertSecurityScheme(scheme: SecurityScheme): AuthConfig {
     };
   }
 
-  // OAuth2 — map to bearer since we can't do the flow
+  // OAuth2 — map to OAuth 2.0 auth config with flow details
+  // Prefer authorizationCode (more complete: has both authUrl + tokenUrl)
+  // Use operation-level required scopes when available; fall back to all flow scopes
   if (scheme.type === 'oauth2') {
+    const flows = scheme.flows;
+    // undefined = no operation scopes specified, use all flow scopes
+    // [] = operation explicitly requires no scopes, use empty string
+    // ['read'] = operation requires specific scopes
+    const scopeStr = (flow: OAuthFlow | undefined) =>
+      requiredScopes !== undefined
+        ? requiredScopes.join(' ')
+        : flow?.scopes ? Object.keys(flow.scopes).join(' ') : '';
+    if (flows?.authorizationCode) {
+      return {
+        type: 'oauth2',
+        oauth2: {
+          grantType: 'authorization_code',
+          authUrl: flows.authorizationCode.authorizationUrl || '',
+          tokenUrl: flows.authorizationCode.tokenUrl || '',
+          clientId: '',
+          clientSecret: '',
+          scope: scopeStr(flows.authorizationCode),
+          callbackUrl: '',
+        },
+      };
+    }
+    if (flows?.clientCredentials) {
+      return {
+        type: 'oauth2',
+        oauth2: {
+          grantType: 'client_credentials',
+          authUrl: '',
+          tokenUrl: flows.clientCredentials.tokenUrl || '',
+          clientId: '',
+          clientSecret: '',
+          scope: scopeStr(flows.clientCredentials),
+          callbackUrl: '',
+        },
+      };
+    }
+    // Swagger 2.0: OAuth2 fields are flat on the scheme (flow, authorizationUrl, tokenUrl, scopes)
+    if (scheme.flow) {
+      const swagger2Scope = requiredScopes !== undefined
+        ? requiredScopes.join(' ')
+        : scheme.scopes ? Object.keys(scheme.scopes).join(' ') : '';
+      // Swagger 2.0 "accessCode" = authorization_code, "application" = client_credentials
+      if (scheme.flow === 'accessCode') {
+        return {
+          type: 'oauth2',
+          oauth2: {
+            grantType: 'authorization_code',
+            authUrl: scheme.authorizationUrl || '',
+            tokenUrl: scheme.tokenUrl || '',
+            clientId: '',
+            clientSecret: '',
+            scope: swagger2Scope,
+            callbackUrl: '',
+          },
+        };
+      }
+      if (scheme.flow === 'application') {
+        return {
+          type: 'oauth2',
+          oauth2: {
+            grantType: 'client_credentials',
+            authUrl: '',
+            tokenUrl: scheme.tokenUrl || '',
+            clientId: '',
+            clientSecret: '',
+            scope: swagger2Scope,
+            callbackUrl: '',
+          },
+        };
+      }
+    }
+    // Fallback for implicit/password flows — use bearer as placeholder
     return { type: 'bearer', bearer: { token: '' } };
   }
 

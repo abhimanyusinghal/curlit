@@ -84,3 +84,25 @@ describe('Proxy Server', () => {
     expect(Array.isArray(res.body.cookies)).toBe(true);
   });
 });
+
+describe('OAuth Token Endpoint', () => {
+  it('returns 400 when tokenUrl is missing', async () => {
+    const res = await request.post('/api/oauth/token').send({
+      grantType: 'client_credentials',
+      clientId: 'id',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Token URL is required');
+  });
+
+  it('returns error for unreachable token URL', async () => {
+    const res = await request.post('/api/oauth/token').send({
+      tokenUrl: 'http://localhost:99999/token',
+      grantType: 'client_credentials',
+      clientId: 'id',
+      clientSecret: 'secret',
+    });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBeDefined();
+  });
+});

@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import { Agent } from 'undici';
 
 const app = express();
 const PORT = 3001;
@@ -45,7 +46,7 @@ function buildMultipartBody(entries) {
 }
 
 app.post('/api/proxy', async (req, res) => {
-  const { method, url, headers, body, bodyType, formDataEntries, binary } = req.body;
+  const { method, url, headers, body, bodyType, formDataEntries, binary, sslVerification } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: 'URL is required' });
@@ -84,6 +85,11 @@ app.post('/api/proxy', async (req, res) => {
       } else if (body) {
         fetchOptions.body = JSON.stringify(body);
       }
+    }
+
+    // When SSL verification is disabled, use a custom undici Agent that skips cert checks
+    if (sslVerification === false) {
+      fetchOptions.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
     }
 
     const startTime = Date.now();
@@ -154,6 +160,85 @@ app.post('/api/proxy', async (req, res) => {
       body: errorDetail,
       cookies: [],
       time: 0,
+    });
+  }
+});
+
+/**
+ * OAuth 2.0 token exchange endpoint.
+ * Handles both authorization_code and client_credentials grant types.
+ */
+app.post('/api/oauth/token', async (req, res) => {
+  const { tokenUrl, grantType, clientId, clientSecret, code, redirectUri, scope, sslVerification, clientAuthMethod } = req.body;
+
+  if (!tokenUrl) {
+    return res.status(400).json({ error: 'Token URL is required' });
+  }
+  if (!grantType) {
+    return res.status(400).json({ error: 'Grant type is required' });
+  }
+  if (!clientId) {
+    return res.status(400).json({ error: 'Client ID is required' });
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.append('grant_type', grantType);
+
+    const fetchHeaders = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+    if (clientAuthMethod === 'basic' && clientSecret) {
+      // client_secret_basic: send credentials via Authorization header
+      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      fetchHeaders['Authorization'] = `Basic ${credentials}`;
+    } else {
+      // client_secret_post (default): send credentials in body
+      params.append('client_id', clientId);
+      if (clientSecret) {
+        params.append('client_secret', clientSecret);
+      }
+    }
+
+    if (grantType === 'authorization_code') {
+      if (code) params.append('code', code);
+      if (redirectUri) params.append('redirect_uri', redirectUri);
+    }
+
+    if (scope) {
+      params.append('scope', scope);
+    }
+
+    const fetchOptions = {
+      method: 'POST',
+      headers: fetchHeaders,
+      body: params.toString(),
+    };
+
+    if (sslVerification === false) {
+      fetchOptions.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+    }
+
+    const response = await fetch(tokenUrl, fetchOptions);
+
+    const text = await response.text();
+    const contentType = response.headers.get('content-type') || '';
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // Some providers (e.g. older GitHub) return form-encoded token responses
+      if (contentType.includes('application/x-www-form-urlencoded') || text.includes('access_token=')) {
+        data = Object.fromEntries(new URLSearchParams(text));
+      } else {
+        data = { error: 'Invalid response from token endpoint', raw: text };
+      }
+    }
+
+    res.status(response.status).json(data);
+  } catch (error) {
+    const cause = error.cause || error;
+    res.status(500).json({
+      error: cause.message || error.message || 'Token exchange failed',
     });
   }
 });

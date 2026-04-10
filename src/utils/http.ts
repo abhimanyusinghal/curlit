@@ -33,6 +33,14 @@ export function buildHeaders(headers: KeyValuePair[], auth: AuthConfig): Record<
         result[auth.apiKey.key] = auth.apiKey.value;
       }
       break;
+    case 'oauth2':
+      if (auth.oauth2?.token?.accessToken) {
+        const tokenType = auth.oauth2.token.tokenType || 'Bearer';
+        // Normalize common "bearer" casing; preserve everything else (e.g. "MAC", "DPoP")
+        const prefix = tokenType.toLowerCase() === 'bearer' ? 'Bearer' : tokenType;
+        result['Authorization'] = `${prefix} ${auth.oauth2.token.accessToken}`;
+      }
+      break;
   }
 
   return result;
@@ -149,6 +157,22 @@ export function resolveRequestVariables(request: RequestConfig, variables: Recor
   };
 }
 
+export function resolveOAuth2Variables(
+  oauth2: import('../types').OAuth2Config,
+  variables: Record<string, string>,
+): import('../types').OAuth2Config {
+  return {
+    ...oauth2,
+    authUrl: resolveVariables(oauth2.authUrl, variables),
+    tokenUrl: resolveVariables(oauth2.tokenUrl, variables),
+    clientId: resolveVariables(oauth2.clientId, variables),
+    clientSecret: resolveVariables(oauth2.clientSecret, variables),
+    scope: resolveVariables(oauth2.scope, variables),
+    callbackUrl: resolveVariables(oauth2.callbackUrl, variables),
+    state: oauth2.state ? resolveVariables(oauth2.state, variables) : undefined,
+  };
+}
+
 function resolveAuthVariables(auth: AuthConfig, variables: Record<string, string>): AuthConfig {
   const resolved = { ...auth };
   if (resolved.basic) {
@@ -166,6 +190,9 @@ function resolveAuthVariables(auth: AuthConfig, variables: Record<string, string
       key: resolveVariables(resolved.apiKey.key, variables),
       value: resolveVariables(resolved.apiKey.value, variables),
     };
+  }
+  if (resolved.oauth2) {
+    resolved.oauth2 = resolveOAuth2Variables(resolved.oauth2, variables);
   }
   return resolved;
 }
@@ -236,6 +263,7 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
       headers,
       bodyType: 'form-data',
       formDataEntries,
+      sslVerification: request.sslVerification !== false,
     });
   } else if (request.body.type === 'binary') {
     const file = getFile(request.id, BINARY_ENTRY_ID);
@@ -253,6 +281,7 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
       headers,
       bodyType: 'binary',
       binary: { base64, fileName: file.name, fileType: file.type || 'application/octet-stream' },
+      sslVerification: request.sslVerification !== false,
     });
   } else {
     proxyBody = JSON.stringify({
@@ -261,6 +290,7 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
       headers,
       body: body instanceof FormData ? Object.fromEntries(body) : body,
       bodyType: request.body.type,
+      sslVerification: request.sslVerification !== false,
     });
   }
 
@@ -401,11 +431,20 @@ export function parseCurlCommand(curlStr: string): Partial<RequestConfig> {
     };
   }
 
+  // Detect --insecure / -k flag
+  if (/(?:^|\s)(?:--insecure|-k)(?:\s|$)/.test(cleaned)) {
+    result.sslVerification = false;
+  }
+
   return result;
 }
 
 export function generateCurlCommand(request: RequestConfig): string {
   const parts: string[] = ['curl'];
+
+  if (request.sslVerification === false) {
+    parts.push('--insecure');
+  }
 
   if (request.method !== 'GET') {
     parts.push(`-X ${request.method}`);

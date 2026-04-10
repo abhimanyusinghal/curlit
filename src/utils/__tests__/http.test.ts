@@ -97,6 +97,63 @@ describe('buildHeaders', () => {
     const result = buildHeaders([], auth);
     expect(result).toEqual({});
   });
+
+  it('adds OAuth 2.0 Bearer header from stored token', () => {
+    const auth: AuthConfig = {
+      type: 'oauth2',
+      oauth2: {
+        grantType: 'client_credentials',
+        authUrl: '',
+        tokenUrl: 'https://auth.example.com/token',
+        clientId: 'id',
+        clientSecret: 'secret',
+        scope: '',
+        callbackUrl: '',
+        token: { accessToken: 'oauth-tok-123', tokenType: 'Bearer', obtainedAt: Date.now() },
+      },
+    };
+    const result = buildHeaders([], auth);
+    expect(result['Authorization']).toBe('Bearer oauth-tok-123');
+  });
+
+  it('normalizes "bearer" casing but preserves other token types', () => {
+    const makeAuth = (tokenType: string): AuthConfig => ({
+      type: 'oauth2',
+      oauth2: {
+        grantType: 'client_credentials',
+        authUrl: '',
+        tokenUrl: '',
+        clientId: '',
+        clientSecret: '',
+        scope: '',
+        callbackUrl: '',
+        token: { accessToken: 'tok', tokenType },
+      },
+    });
+    // "bearer" variants all normalize to "Bearer"
+    expect(buildHeaders([], makeAuth('bearer'))['Authorization']).toBe('Bearer tok');
+    expect(buildHeaders([], makeAuth('BEARER'))['Authorization']).toBe('Bearer tok');
+    // Non-bearer types are preserved as-is
+    expect(buildHeaders([], makeAuth('MAC'))['Authorization']).toBe('MAC tok');
+    expect(buildHeaders([], makeAuth('DPoP'))['Authorization']).toBe('DPoP tok');
+  });
+
+  it('does not add Authorization when oauth2 has no token', () => {
+    const auth: AuthConfig = {
+      type: 'oauth2',
+      oauth2: {
+        grantType: 'client_credentials',
+        authUrl: '',
+        tokenUrl: 'https://auth.example.com/token',
+        clientId: 'id',
+        clientSecret: 'secret',
+        scope: '',
+        callbackUrl: '',
+      },
+    };
+    const result = buildHeaders([], auth);
+    expect(result).toEqual({});
+  });
 });
 
 // ─── buildBody ───────────────────────────────────────────────────────────────
@@ -434,6 +491,37 @@ describe('resolveRequestVariables', () => {
     const original = req.url;
     resolveRequestVariables(req, vars);
     expect(req.url).toBe(original);
+  });
+
+  it('resolves variables in OAuth 2.0 config', () => {
+    const req = createDefaultRequest({
+      url: 'https://api.example.com',
+      auth: {
+        type: 'oauth2',
+        oauth2: {
+          grantType: 'client_credentials',
+          authUrl: '{{host}}/authorize',
+          tokenUrl: '{{host}}/token',
+          clientId: '{{clientId}}',
+          clientSecret: '{{secret}}',
+          scope: '{{scope}}',
+          callbackUrl: '{{callback}}',
+        },
+      },
+    });
+    const resolved = resolveRequestVariables(req, {
+      ...vars,
+      clientId: 'my-id',
+      secret: 'my-secret',
+      scope: 'read',
+      callback: 'https://localhost/cb',
+    });
+    expect(resolved.auth.oauth2?.tokenUrl).toBe('api.test/token');
+    expect(resolved.auth.oauth2?.authUrl).toBe('api.test/authorize');
+    expect(resolved.auth.oauth2?.clientId).toBe('my-id');
+    expect(resolved.auth.oauth2?.clientSecret).toBe('my-secret');
+    expect(resolved.auth.oauth2?.scope).toBe('read');
+    expect(resolved.auth.oauth2?.callbackUrl).toBe('https://localhost/cb');
   });
 });
 
