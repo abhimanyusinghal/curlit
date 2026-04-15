@@ -9,8 +9,11 @@ import type {
   HttpMethod,
   TestResult,
   ScriptConsoleEntry,
+  WebSocketSession,
+  WebSocketMessage,
+  WebSocketConnectionStatus,
 } from '../types';
-import { createDefaultRequest } from '../types';
+import { createDefaultRequest, createDefaultWebSocketSession } from '../types';
 import { removeFilesForRequest } from '../utils/fileStore';
 
 const STORAGE_KEYS = {
@@ -67,6 +70,9 @@ interface AppState {
   scriptLogs: Record<string, ScriptConsoleEntry[]>;
   chainVariables: Record<string, string>;
 
+  // WebSocket
+  webSocketSessions: Record<string, WebSocketSession>;
+
   // UI
   theme: Theme;
   sidebarView: SidebarView;
@@ -110,6 +116,12 @@ interface AppState {
   clearChainVariables: () => void;
   getChainVariables: () => Record<string, string>;
 
+  // Actions - WebSocket
+  setWebSocketStatus: (requestId: string, status: WebSocketConnectionStatus, error?: string | null) => void;
+  addWebSocketMessage: (requestId: string, message: WebSocketMessage) => void;
+  clearWebSocketMessages: (requestId: string) => void;
+  resetWebSocketSession: (requestId: string) => void;
+
   // Actions - Save
   saveActiveRequest: () => 'saved' | 'needs-collection';
   markTabSaved: (tabId: string, collectionId: string, sourceRequestId: string) => void;
@@ -145,6 +157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   testResults: {},
   scriptLogs: {},
   chainVariables: loadFromStorage<Record<string, string>>(STORAGE_KEYS.chainVariables, {}),
+  webSocketSessions: {},
   theme: loadFromStorage<Theme>(STORAGE_KEYS.theme, 'dark'),
   sidebarView: 'collections',
   sidebarOpen: true,
@@ -160,6 +173,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       requestId: request.id,
       name: request.name,
       method: request.method,
+      protocol: request.protocol,
       isModified: false,
     };
     set(state => ({
@@ -187,6 +201,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       requestId: newReq.id,
       name: newReq.name,
       method: newReq.method,
+      protocol: newReq.protocol,
       isModified: false,
     };
     set(s => ({
@@ -201,11 +216,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newTabs = state.tabs.filter(t => t.id !== tabId);
       const newRequests = { ...state.requests };
       const newResponses = { ...state.responses };
+      const newWsSessions = { ...state.webSocketSessions };
       const tab = state.tabs.find(t => t.id === tabId);
       if (tab) {
+        // Lazy import to avoid circular dependency (websocket.ts imports this store)
+        import('../utils/websocket').then(m => m.disconnectWebSocket(tab.requestId));
         removeFilesForRequest(tab.requestId);
         delete newRequests[tab.requestId];
         delete newResponses[tab.requestId];
+        delete newWsSessions[tab.requestId];
       }
 
       let newActiveTabId = state.activeTabId;
@@ -234,6 +253,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         activeTabId: newActiveTabId,
         requests: newRequests,
         responses: newResponses,
+        webSocketSessions: newWsSessions,
       };
     });
   },
@@ -248,7 +268,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const updated = { ...existing, ...updates };
       const newTabs = state.tabs.map(t =>
         t.requestId === id
-          ? { ...t, name: updated.name, method: updated.method as HttpMethod, isModified: true }
+          ? { ...t, name: updated.name, method: updated.method as HttpMethod, protocol: updated.protocol, isModified: true }
           : t
       );
       return {
@@ -355,6 +375,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         requestId: newReq.id,
         name: newReq.name,
         method: newReq.method,
+        protocol: newReq.protocol,
         isModified: false,
         collectionId,
         sourceRequestId: requestId,
@@ -473,6 +494,59 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   getChainVariables: () => get().chainVariables,
+
+  // WebSocket actions
+  setWebSocketStatus: (requestId, status, error) => {
+    set(state => {
+      // Guard: don't create entries for requests that have been removed (e.g. late callbacks after tab close)
+      if (!state.requests[requestId]) return state;
+      const session = state.webSocketSessions[requestId] || createDefaultWebSocketSession();
+      const updated = { ...session, status, error: error ?? null };
+      if (status === 'connected') {
+        updated.connectedAt = Date.now();
+        updated.disconnectedAt = null;
+      } else if (status === 'disconnected') {
+        updated.disconnectedAt = Date.now();
+      }
+      return { webSocketSessions: { ...state.webSocketSessions, [requestId]: updated } };
+    });
+  },
+
+  addWebSocketMessage: (requestId, message) => {
+    set(state => {
+      if (!state.requests[requestId]) return state;
+      const session = state.webSocketSessions[requestId] || createDefaultWebSocketSession();
+      const messages = [...session.messages, message].slice(-1000);
+      return {
+        webSocketSessions: {
+          ...state.webSocketSessions,
+          [requestId]: { ...session, messages },
+        },
+      };
+    });
+  },
+
+  clearWebSocketMessages: (requestId) => {
+    set(state => {
+      const session = state.webSocketSessions[requestId];
+      if (!session) return state;
+      return {
+        webSocketSessions: {
+          ...state.webSocketSessions,
+          [requestId]: { ...session, messages: [] },
+        },
+      };
+    });
+  },
+
+  resetWebSocketSession: (requestId) => {
+    set(state => ({
+      webSocketSessions: {
+        ...state.webSocketSessions,
+        [requestId]: createDefaultWebSocketSession(),
+      },
+    }));
+  },
 
   // Save actions
   saveActiveRequest: () => {

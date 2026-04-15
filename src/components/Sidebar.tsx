@@ -291,7 +291,7 @@ function CollectionItem({ collection }: { collection: Collection }) {
                 onClick={() => openRequestFromCollection(collection.id, req.id)}
                 className="flex-1 flex items-center gap-2 px-3 py-1.5 hover:bg-dark-800/50 transition-colors cursor-pointer"
               >
-                <MethodBadge method={req.method} size="sm" />
+                <MethodBadge method={req.protocol === 'websocket' ? 'WS' : req.method} size="sm" />
                 <span className="text-xs text-dark-300 truncate">{req.name || req.url || 'Untitled'}</span>
               </button>
               <button
@@ -380,7 +380,7 @@ function HistoryPanel() {
                 onClick={() => openFromHistory(entry)}
                 className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-dark-800/50 transition-colors cursor-pointer"
               >
-                <MethodBadge method={entry.request.method} size="sm" />
+                <MethodBadge method={entry.request.protocol === 'websocket' ? 'WS' : entry.request.method} size="sm" />
                 <span className="text-xs text-dark-300 truncate flex-1 text-left">
                   {entry.request.url || 'Untitled'}
                 </span>

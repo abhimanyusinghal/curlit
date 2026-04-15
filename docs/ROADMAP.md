@@ -49,7 +49,7 @@
 - [x] Pre-request scripts (JavaScript, runs before send)
 - [x] Post-response tests (assertions on status, body, headers)
 - [x] Request chaining -- use values from one response in the next request
-- [ ] WebSocket support
+- [x] WebSocket support
 
 ### v1.3 -- Collaboration & Sync
 
