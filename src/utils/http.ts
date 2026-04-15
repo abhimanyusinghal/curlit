@@ -5,7 +5,7 @@ export function buildUrl(baseUrl: string, params: KeyValuePair[]): string {
   const enabledParams = params.filter(p => p.enabled && p.key);
   if (enabledParams.length === 0) return baseUrl;
 
-  const url = new URL(baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`);
+  const url = new URL(/^(https?|wss?):\/\//.test(baseUrl) ? baseUrl : `https://${baseUrl}`);
   enabledParams.forEach(p => url.searchParams.append(p.key, p.value));
   return url.toString();
 }
@@ -498,6 +498,7 @@ export function getMethodColor(method: string): string {
     DELETE: 'text-method-delete',
     HEAD: 'text-method-head',
     OPTIONS: 'text-method-options',
+    WS: 'text-method-ws',
   };
   return colors[method] || 'text-dark-300';
 }
@@ -511,6 +512,7 @@ export function getMethodBgColor(method: string): string {
     DELETE: 'bg-method-delete/10 border-method-delete/30',
     HEAD: 'bg-method-head/10 border-method-head/30',
     OPTIONS: 'bg-method-options/10 border-method-options/30',
+    WS: 'bg-method-ws/10 border-method-ws/30',
   };
   return colors[method] || '';
 }

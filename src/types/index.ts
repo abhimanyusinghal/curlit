@@ -1,5 +1,28 @@
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 
+export type RequestProtocol = 'http' | 'websocket';
+
+export type WebSocketConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+export type WebSocketMessageDirection = 'sent' | 'received';
+
+export interface WebSocketMessage {
+  id: string;
+  direction: WebSocketMessageDirection;
+  data: string;
+  timestamp: number;
+  size: number;
+  isBinary?: boolean;
+}
+
+export interface WebSocketSession {
+  status: WebSocketConnectionStatus;
+  messages: WebSocketMessage[];
+  connectedAt: number | null;
+  disconnectedAt: number | null;
+  error: string | null;
+}
+
 export interface KeyValuePair {
   id: string;
   key: string;
@@ -58,6 +81,7 @@ export interface RequestConfig {
   name: string;
   method: HttpMethod;
   url: string;
+  protocol?: RequestProtocol;
   params: KeyValuePair[];
   headers: KeyValuePair[];
   body: {
@@ -133,6 +157,7 @@ export interface Tab {
   requestId: string;
   name: string;
   method: HttpMethod;
+  protocol?: RequestProtocol;
   isModified: boolean;
   collectionId?: string;
   sourceRequestId?: string;
@@ -154,6 +179,16 @@ export function createDefaultRequest(overrides?: Partial<RequestConfig>): Reques
     },
     auth: { type: 'none' },
     ...overrides,
+  };
+}
+
+export function createDefaultWebSocketSession(): WebSocketSession {
+  return {
+    status: 'disconnected',
+    messages: [],
+    connectedAt: null,
+    disconnectedAt: null,
+    error: null,
   };
 }
 

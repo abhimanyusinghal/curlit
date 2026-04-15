@@ -47,7 +47,7 @@ export function RequestTabs() {
               : 'bg-dark-900 text-dark-300 hover:bg-dark-800/50'
           }`}
         >
-          <MethodBadge method={tab.method} size="sm" />
+          <MethodBadge method={tab.protocol === 'websocket' ? 'WS' : tab.method} size="sm" />
           {editingTabId === tab.id ? (
             <input
               ref={inputRef}

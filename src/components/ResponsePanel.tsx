@@ -6,19 +6,24 @@ import { html } from '@codemirror/lang-html';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { search, openSearchPanel } from '@codemirror/search';
 import { Copy, Check, FileDown, Search, CircleCheck, CircleX, Terminal } from 'lucide-react';
-import type { ResponseData } from '../types';
+import type { ResponseData, RequestProtocol } from '../types';
 import { getStatusColor, formatBytes, formatTime, tryFormatJson } from '../utils/http';
 import { useAppStore } from '../store';
+import { WebSocketMessageLog } from './WebSocketMessageLog';
 
 interface Props {
   response: ResponseData | null;
   loading: boolean;
   requestId: string;
+  protocol?: RequestProtocol;
 }
 
 type ResponseTab = 'body' | 'headers' | 'cookies' | 'tests' | 'console';
 
-export function ResponsePanel({ response, loading, requestId }: Props) {
+export function ResponsePanel({ response, loading, requestId, protocol }: Props) {
+  if (protocol === 'websocket') {
+    return <WebSocketMessageLog requestId={requestId} />;
+  }
   const [activeTab, setActiveTab] = useState<ResponseTab>('body');
   const [copied, setCopied] = useState(false);
   const [bodyFormat, setBodyFormat] = useState<'pretty' | 'raw'>('pretty');

@@ -12,16 +12,94 @@ import { KeyValueEditor } from './KeyValueEditor';
 import { FormDataEditor } from './FormDataEditor';
 import { BinaryBodyEditor } from './BinaryBodyEditor';
 import { GraphQLEditor } from './GraphQLEditor';
+import { WebSocketMessageComposer } from './WebSocketMessageComposer';
 import { fetchOAuth2Token, buildAuthorizationUrl, isTokenExpired } from '../utils/oauth';
 import { resolveOAuth2Variables } from '../utils/http';
 
 type RequestTabType = 'params' | 'headers' | 'body' | 'auth' | 'scripts';
+type WsRequestTabType = 'message' | 'params' | 'headers' | 'auth';
 
 interface Props {
   request: RequestConfig;
 }
 
 export function RequestPanel({ request }: Props) {
+  const isWs = request.protocol === 'websocket';
+
+  if (isWs) {
+    return <WebSocketRequestPanel request={request} />;
+  }
+
+  return <HttpRequestPanel request={request} />;
+}
+
+function WebSocketRequestPanel({ request }: { request: RequestConfig }) {
+  const [activeTab, setActiveTab] = useState<WsRequestTabType>('message');
+  const updateRequest = useAppStore(s => s.updateRequest);
+
+  const tabs: { id: WsRequestTabType; label: string; count?: number }[] = [
+    { id: 'message', label: 'Message' },
+    { id: 'params', label: 'Params', count: request.params.filter(p => p.enabled && p.key).length },
+    { id: 'headers', label: 'Headers', count: request.headers.filter(h => h.enabled && h.key).length },
+    { id: 'auth', label: 'Auth' },
+  ];
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center border-b border-dark-600 bg-dark-800/50">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === tab.id
+                ? 'text-dark-100 border-b-2 border-accent-blue'
+                : 'text-dark-300 hover:text-dark-200'
+            }`}
+          >
+            {tab.label}
+            {tab.count !== undefined && tab.count > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] bg-accent-blue/20 text-accent-blue rounded-full">
+                {tab.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-auto p-2">
+        {activeTab === 'message' && (
+          <WebSocketMessageComposer requestId={request.id} />
+        )}
+
+        {activeTab === 'params' && (
+          <KeyValueEditor
+            pairs={request.params}
+            onChange={params => updateRequest(request.id, { params })}
+            keyPlaceholder="Parameter"
+            valuePlaceholder="Value"
+            showDescription
+          />
+        )}
+
+        {activeTab === 'headers' && (
+          <KeyValueEditor
+            pairs={request.headers}
+            onChange={headers => updateRequest(request.id, { headers })}
+            keyPlaceholder="Header"
+            valuePlaceholder="Value"
+          />
+        )}
+
+        {activeTab === 'auth' && (
+          <AuthEditor request={request} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HttpRequestPanel({ request }: { request: RequestConfig }) {
   const [activeTab, setActiveTab] = useState<RequestTabType>('params');
   const updateRequest = useAppStore(s => s.updateRequest);
 

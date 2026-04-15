@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import { Agent } from 'undici';
+import { WebSocketServer, WebSocket as WsClient } from 'ws';
 
 const app = express();
 const PORT = 3001;
@@ -249,7 +250,103 @@ export { app };
 // Only start server when not in test environment
 const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST;
 if (!isTest) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`CurlIt proxy server running on http://localhost:${PORT}`);
+  });
+
+  /**
+   * WebSocket relay: browser <--WS--> proxy <--ws lib--> target server.
+   * The first message from the browser is a JSON control frame:
+   *   { type: 'connect', url, headers, sslVerification }
+   * After that:
+   *   { type: 'message', data }   — relay to target
+   *   { type: 'close' }           — close target connection
+   *
+   * Proxy sends back to browser:
+   *   { type: 'connected' }
+   *   { type: 'message', data }
+   *   { type: 'error', message }
+   *   { type: 'closed', code, reason }
+   */
+  const wss = new WebSocketServer({ server, path: '/api/ws-proxy' });
+
+  wss.on('connection', (clientWs) => {
+    let targetWs = null;
+    let connected = false;
+
+    clientWs.on('message', (raw) => {
+      let msg;
+      try {
+        msg = JSON.parse(raw.toString());
+      } catch {
+        clientWs.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' }));
+        return;
+      }
+
+      if (msg.type === 'connect' && !connected) {
+        const wsOptions = {};
+        if (msg.headers && Object.keys(msg.headers).length > 0) {
+          wsOptions.headers = msg.headers;
+        }
+        if (msg.sslVerification === false) {
+          wsOptions.rejectUnauthorized = false;
+        }
+
+        try {
+          targetWs = new WsClient(msg.url, wsOptions);
+        } catch (err) {
+          clientWs.send(JSON.stringify({ type: 'error', message: err.message }));
+          return;
+        }
+
+        targetWs.on('open', () => {
+          connected = true;
+          clientWs.send(JSON.stringify({ type: 'connected' }));
+        });
+
+        targetWs.on('message', (data, isBinary) => {
+          if (clientWs.readyState === WsClient.OPEN) {
+            if (isBinary) {
+              const base64 = Buffer.from(data).toString('base64');
+              clientWs.send(JSON.stringify({ type: 'message', data: base64, isBinary: true, size: data.byteLength }));
+            } else {
+              clientWs.send(JSON.stringify({ type: 'message', data: data.toString() }));
+            }
+          }
+        });
+
+        targetWs.on('close', (code, reason) => {
+          connected = false;
+          if (clientWs.readyState === WsClient.OPEN) {
+            clientWs.send(JSON.stringify({ type: 'closed', code, reason: reason.toString() }));
+            clientWs.close();
+          }
+        });
+
+        targetWs.on('error', (err) => {
+          connected = false;
+          if (clientWs.readyState === WsClient.OPEN) {
+            clientWs.send(JSON.stringify({ type: 'error', message: err.message }));
+            clientWs.close();
+          }
+        });
+      } else if (msg.type === 'message' && targetWs && connected) {
+        targetWs.send(msg.data);
+      } else if (msg.type === 'close') {
+        if (targetWs) {
+          targetWs.close();
+          targetWs = null;
+        }
+        connected = false;
+      }
+    });
+
+    clientWs.on('close', () => {
+      if (targetWs) {
+        targetWs.close();
+        targetWs = null;
+      }
+      connected = false;
+    });
   });
 }

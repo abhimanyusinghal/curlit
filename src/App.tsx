@@ -23,6 +23,7 @@ import { CurlExportModal } from './components/CurlExportModal';
 import { OpenApiImportModal } from './components/OpenApiImportModal';
 import { SaveRequestModal } from './components/SaveRequestModal';
 import { useResizable } from './hooks/useResizable';
+import { disconnectWebSocket } from './utils/websocket';
 
 function App() {
   const activeTabId = useAppStore(s => s.activeTabId);
@@ -105,6 +106,20 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  // Close all WebSocket connections on page unload
+  useEffect(() => {
+    const cleanup = () => {
+      const state = useAppStore.getState();
+      for (const requestId of Object.keys(state.webSocketSessions)) {
+        if (state.webSocketSessions[requestId]?.status === 'connected') {
+          disconnectWebSocket(requestId);
+        }
+      }
+    };
+    window.addEventListener('beforeunload', cleanup);
+    return () => window.removeEventListener('beforeunload', cleanup);
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-dark-900">
@@ -214,6 +229,7 @@ function App() {
                   response={activeResponse ?? null}
                   loading={!!activeLoading}
                   requestId={activeRequest.id}
+                  protocol={activeRequest.protocol}
                 />
               </div>
             </>
