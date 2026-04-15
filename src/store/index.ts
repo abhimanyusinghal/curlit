@@ -7,6 +7,8 @@ import type {
   Environment,
   Tab,
   HttpMethod,
+  TestResult,
+  ScriptConsoleEntry,
 } from '../types';
 import { createDefaultRequest } from '../types';
 import { removeFilesForRequest } from '../utils/fileStore';
@@ -17,6 +19,7 @@ const STORAGE_KEYS = {
   environments: 'curlit_environments',
   activeEnv: 'curlit_active_env',
   theme: 'curlit_theme',
+  chainVariables: 'curlit_chain_vars',
 };
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -59,6 +62,11 @@ interface AppState {
   environments: Environment[];
   activeEnvironmentId: string | null;
 
+  // Scripts & Tests
+  testResults: Record<string, TestResult[]>;
+  scriptLogs: Record<string, ScriptConsoleEntry[]>;
+  chainVariables: Record<string, string>;
+
   // UI
   theme: Theme;
   sidebarView: SidebarView;
@@ -95,6 +103,13 @@ interface AppState {
   setActiveEnvironment: (id: string | null) => void;
   getActiveVariables: () => Record<string, string>;
 
+  // Actions - Scripts & Tests
+  setTestResults: (requestId: string, results: TestResult[]) => void;
+  setScriptLogs: (requestId: string, logs: ScriptConsoleEntry[]) => void;
+  updateChainVariables: (vars: Record<string, string>) => void;
+  clearChainVariables: () => void;
+  getChainVariables: () => Record<string, string>;
+
   // Actions - Save
   saveActiveRequest: () => 'saved' | 'needs-collection';
   markTabSaved: (tabId: string, collectionId: string, sourceRequestId: string) => void;
@@ -127,6 +142,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   history: loadFromStorage<HistoryEntry[]>(STORAGE_KEYS.history, []),
   environments: loadFromStorage<Environment[]>(STORAGE_KEYS.environments, []),
   activeEnvironmentId: loadFromStorage<string | null>(STORAGE_KEYS.activeEnv, null),
+  testResults: {},
+  scriptLogs: {},
+  chainVariables: loadFromStorage<Record<string, string>>(STORAGE_KEYS.chainVariables, {}),
   theme: loadFromStorage<Theme>(STORAGE_KEYS.theme, 'dark'),
   sidebarView: 'collections',
   sidebarOpen: true,
@@ -427,6 +445,34 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     return vars;
   },
+
+  // Script & Test actions
+  setTestResults: (requestId, results) => {
+    set(state => ({
+      testResults: { ...state.testResults, [requestId]: results },
+    }));
+  },
+
+  setScriptLogs: (requestId, logs) => {
+    set(state => ({
+      scriptLogs: { ...state.scriptLogs, [requestId]: logs },
+    }));
+  },
+
+  updateChainVariables: (vars) => {
+    set(state => {
+      const chainVariables = { ...state.chainVariables, ...vars };
+      saveToStorage(STORAGE_KEYS.chainVariables, chainVariables);
+      return { chainVariables };
+    });
+  },
+
+  clearChainVariables: () => {
+    saveToStorage(STORAGE_KEYS.chainVariables, {});
+    set({ chainVariables: {} });
+  },
+
+  getChainVariables: () => get().chainVariables,
 
   // Save actions
   saveActiveRequest: () => {

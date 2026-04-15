@@ -1,8 +1,9 @@
 import { Send, Loader2, ShieldCheck, ShieldOff } from 'lucide-react';
 import type { HttpMethod, RequestConfig } from '../types';
 import { useAppStore } from '../store';
-import { sendRequest, resolveRequestVariables } from '../utils/http';
+import { sendRequest, resolveRequestVariables, buildHeaders, buildBody } from '../utils/http';
 import { getMethodColor } from '../utils/http';
+import { runPreRequestScript, runTestScript } from '../utils/scriptEngine';
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
@@ -16,6 +17,10 @@ export function UrlBar({ request }: Props) {
   const setLoading = useAppStore(s => s.setLoading);
   const addToHistory = useAppStore(s => s.addToHistory);
   const getActiveVariables = useAppStore(s => s.getActiveVariables);
+  const getChainVariables = useAppStore(s => s.getChainVariables);
+  const updateChainVariables = useAppStore(s => s.updateChainVariables);
+  const setTestResults = useAppStore(s => s.setTestResults);
+  const setScriptLogs = useAppStore(s => s.setScriptLogs);
   const loading = useAppStore(s => s.loadingRequests[request.id]);
 
   const handleSend = async () => {
@@ -23,13 +28,130 @@ export function UrlBar({ request }: Props) {
 
     setLoading(request.id, true);
     setResponse(request.id, null);
+    setTestResults(request.id, []);
+    setScriptLogs(request.id, []);
 
     try {
       const variables = getActiveVariables();
-      const resolved = resolveRequestVariables(request, variables);
+      const chainVars = getChainVariables();
+      let resolved = resolveRequestVariables(request, variables, chainVars);
+      let allLogs: import('../types').ScriptConsoleEntry[] = [];
+
+      // --- Pre-request script ---
+      if (request.preRequestScript?.trim()) {
+        const headers = buildHeaders(resolved.headers, resolved.auth);
+        const body = buildBody(resolved);
+        const bodyStr = body === null ? null : typeof body === 'string' ? body : null;
+
+        const preResult = runPreRequestScript(
+          request.preRequestScript,
+          resolved,
+          headers,
+          bodyStr,
+          variables,
+          chainVars,
+        );
+        allLogs = [...allLogs, ...preResult.logs];
+
+        if (preResult.error) {
+          setScriptLogs(request.id, allLogs);
+          setResponse(request.id, {
+            status: 0,
+            statusText: 'Script Error',
+            headers: {},
+            body: `Pre-request script error: ${preResult.error}`,
+            size: 0,
+            time: 0,
+            cookies: [],
+          });
+          setLoading(request.id, false);
+          return;
+        }
+
+        // Apply mutations from pre-request script.
+        // The script received fully-built headers (auth already baked in),
+        // so we neutralize header-based auth to prevent sendRequest from
+        // re-applying auth headers on top of whatever the script set.
+        // We preserve query-style API-key auth because sendRequest appends
+        // those to the URL — they aren't in the headers the script saw.
+        updateChainVariables(preResult.chain);
+        const isQueryApiKey = resolved.auth.type === 'api-key'
+          && resolved.auth.apiKey?.addTo === 'query';
+        resolved = {
+          ...resolved,
+          method: (preResult.request.method as RequestConfig['method']) || resolved.method,
+          url: preResult.request.url || resolved.url,
+          headers: Object.entries(preResult.request.headers).map(([key, value]) => ({
+            id: crypto.randomUUID(),
+            key,
+            value,
+            enabled: true,
+          })),
+          auth: isQueryApiKey ? resolved.auth : { type: 'none' },
+        };
+
+        // If the script changed the body, override with the raw string.
+        // Switch to body type 'text' so buildBody() reads .raw instead of
+        // rebuilding from structured fields (graphql, form-data, etc.).
+        // Also ensure Content-Type is preserved: the auto-header logic in
+        // sendRequest only fires for specific body types, so we inject the
+        // correct content-type into the resolved headers if the script
+        // didn't already set one.
+        if (preResult.request.body !== null && preResult.request.body !== bodyStr) {
+          const originalType = resolved.body.type;
+          resolved = {
+            ...resolved,
+            body: { ...resolved.body, type: 'text', raw: preResult.request.body },
+          };
+
+          // If the script's headers don't include Content-Type, carry over
+          // what sendRequest would have auto-set for the original body type.
+          const hasContentType = resolved.headers.some(
+            h => h.enabled && h.key.toLowerCase() === 'content-type',
+          );
+          if (!hasContentType) {
+            const autoType: Record<string, string> = {
+              json: 'application/json',
+              graphql: 'application/json',
+              xml: 'application/xml',
+              'x-www-form-urlencoded': 'application/x-www-form-urlencoded',
+            };
+            const ct = autoType[originalType];
+            if (ct) {
+              resolved = {
+                ...resolved,
+                headers: [
+                  ...resolved.headers,
+                  { id: crypto.randomUUID(), key: 'Content-Type', value: ct, enabled: true },
+                ],
+              };
+            }
+          }
+        }
+      }
+
       const response = await sendRequest(resolved);
       setResponse(request.id, response);
       addToHistory(request, response);
+
+      // --- Post-response test script ---
+      if (request.testScript?.trim() && response.status !== 0) {
+        const latestChain = useAppStore.getState().chainVariables;
+        const testResult = runTestScript(request.testScript, resolved, response, latestChain);
+        allLogs = [...allLogs, ...testResult.logs];
+        setTestResults(request.id, testResult.tests);
+        updateChainVariables(testResult.chain);
+
+        if (testResult.error) {
+          allLogs.push({
+            type: 'error',
+            args: [`Test script error: ${testResult.error}`],
+            timestamp: Date.now(),
+          });
+        }
+      }
+
+      setScriptLogs(request.id, allLogs);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send request';
       const isProxyDown = message === 'Failed to fetch' || message.includes('NetworkError');

@@ -46,9 +46,9 @@
 - [x] GraphQL mode with query/variables editor and schema introspection
 - [x] OAuth 2.0 authentication flow (authorization code, client credentials)
 - [x] SSL certificate verification toggle (disable per-request, like Postman's "SSL verification" setting)
-- [ ] Pre-request scripts (JavaScript, runs before send)
-- [ ] Post-response tests (assertions on status, body, headers)
-- [ ] Request chaining -- use values from one response in the next request
+- [x] Pre-request scripts (JavaScript, runs before send)
+- [x] Post-response tests (assertions on status, body, headers)
+- [x] Request chaining -- use values from one response in the next request
 - [ ] WebSocket support
 
 ### v1.3 -- Collaboration & Sync

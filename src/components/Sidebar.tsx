@@ -14,9 +14,21 @@ import {
 import { useAppStore, type SidebarView } from '../store';
 import { MethodBadge } from './MethodBadge';
 import { KeyValueEditor } from './KeyValueEditor';
-import type { Collection } from '../types';
+import type { Collection, RequestConfig } from '../types';
 import { isPostmanCollection, parsePostmanCollection } from '../utils/postman';
 import { parseOpenApiInput, isOpenApiSpec, parseOpenApiSpec } from '../utils/openapi';
+
+/** Strip scripts from imported requests to prevent code execution from untrusted collections. */
+function stripScripts(request: RequestConfig): RequestConfig {
+  const cleaned = { ...request };
+  delete cleaned.preRequestScript;
+  delete cleaned.testScript;
+  return cleaned;
+}
+
+function stripScriptsFromCollection(collection: Collection): Collection {
+  return { ...collection, requests: collection.requests.map(stripScripts) };
+}
 
 export function Sidebar() {
   const sidebarView = useAppStore(s => s.sidebarView);
@@ -98,14 +110,16 @@ function CollectionsPanel() {
         useAppStore.getState().createCollection(name);
         const newCollection = useAppStore.getState().collections[useAppStore.getState().collections.length - 1];
         requests.forEach(r => {
-          useAppStore.getState().saveRequestToCollection(newCollection.id, r);
+          useAppStore.getState().saveRequestToCollection(newCollection.id, stripScripts(r));
         });
       } else if (data.collections && Array.isArray(data.collections)) {
-        // CurlIt native format
+        // CurlIt native format — strip scripts from imported requests to
+        // prevent untrusted collections from executing arbitrary code.
         data.collections.forEach((c: Collection) => {
-          useAppStore.getState().createCollection(c.name);
+          const safe = stripScriptsFromCollection(c);
+          useAppStore.getState().createCollection(safe.name);
           const newCollection = useAppStore.getState().collections[useAppStore.getState().collections.length - 1];
-          c.requests.forEach(r => {
+          safe.requests.forEach(r => {
             useAppStore.getState().saveRequestToCollection(newCollection.id, r);
           });
         });
