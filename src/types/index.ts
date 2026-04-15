@@ -79,6 +79,20 @@ export interface RequestConfig {
   };
   auth: AuthConfig;
   sslVerification?: boolean;
+  preRequestScript?: string;
+  testScript?: string;
+}
+
+export interface TestResult {
+  name: string;
+  passed: boolean;
+  error?: string;
+}
+
+export interface ScriptConsoleEntry {
+  type: 'log' | 'warn' | 'error' | 'info';
+  args: unknown[];
+  timestamp: number;
 }
 
 export interface ResponseData {

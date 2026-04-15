@@ -3,6 +3,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { xml } from '@codemirror/lang-xml';
 import { html } from '@codemirror/lang-html';
+import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
 import type { RequestConfig, BodyType, AuthType, OAuth2GrantType } from '../types';
 import { useAppStore } from '../store';
@@ -14,7 +15,7 @@ import { GraphQLEditor } from './GraphQLEditor';
 import { fetchOAuth2Token, buildAuthorizationUrl, isTokenExpired } from '../utils/oauth';
 import { resolveOAuth2Variables } from '../utils/http';
 
-type RequestTabType = 'params' | 'headers' | 'body' | 'auth';
+type RequestTabType = 'params' | 'headers' | 'body' | 'auth' | 'scripts';
 
 interface Props {
   request: RequestConfig;
@@ -24,11 +25,13 @@ export function RequestPanel({ request }: Props) {
   const [activeTab, setActiveTab] = useState<RequestTabType>('params');
   const updateRequest = useAppStore(s => s.updateRequest);
 
+  const hasScripts = !!(request.preRequestScript?.trim() || request.testScript?.trim());
   const tabs: { id: RequestTabType; label: string; count?: number }[] = [
     { id: 'params', label: 'Params', count: request.params.filter(p => p.enabled && p.key).length },
     { id: 'headers', label: 'Headers', count: request.headers.filter(h => h.enabled && h.key).length },
     { id: 'body', label: 'Body' },
     { id: 'auth', label: 'Auth' },
+    { id: 'scripts', label: 'Scripts', count: hasScripts ? 1 : undefined },
   ];
 
   return (
@@ -82,6 +85,10 @@ export function RequestPanel({ request }: Props) {
 
         {activeTab === 'auth' && (
           <AuthEditor request={request} />
+        )}
+
+        {activeTab === 'scripts' && (
+          <ScriptsEditor request={request} />
         )}
       </div>
     </div>
@@ -622,6 +629,150 @@ function AuthEditor({ request }: { request: RequestConfig }) {
                 Clear Token
               </button>
             )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type ScriptSubTab = 'pre-request' | 'tests';
+
+const PRE_REQUEST_SNIPPETS = [
+  { label: 'Set header', code: `curlit.request.headers['X-Custom'] = 'value';` },
+  { label: 'Set chain variable', code: `curlit.chain.myVar = 'value';` },
+  { label: 'Log request', code: `console.log('Sending:', curlit.request.method, curlit.request.url);` },
+  { label: 'Add timestamp', code: `curlit.request.headers['X-Timestamp'] = Date.now().toString();` },
+];
+
+const TEST_SNIPPETS = [
+  { label: 'Status is 200', code: `test('Status is 200', () => {\n  expect(response.status).toBe(200);\n});` },
+  { label: 'Response has JSON', code: `test('Response is JSON', () => {\n  expect(response.json).toBeTruthy();\n});` },
+  { label: 'Save to chain', code: `// Save a value from response for use in other requests\ncurlit.chain.token = response.json.token;` },
+  { label: 'Check header', code: `test('Has content-type', () => {\n  expect(response.headers['content-type']).toContain('application/json');\n});` },
+  { label: 'Response time', code: `test('Response time < 500ms', () => {\n  expect(response.time).toBeLessThan(500);\n});` },
+];
+
+function ScriptsEditor({ request }: { request: RequestConfig }) {
+  const [subTab, setSubTab] = useState<ScriptSubTab>('pre-request');
+  const updateRequest = useAppStore(s => s.updateRequest);
+  const chainVariables = useAppStore(s => s.chainVariables);
+  const clearChainVariables = useAppStore(s => s.clearChainVariables);
+  const theme = useAppStore(s => s.theme) as Theme;
+
+  const snippets = subTab === 'pre-request' ? PRE_REQUEST_SNIPPETS : TEST_SNIPPETS;
+  const currentScript = subTab === 'pre-request' ? (request.preRequestScript ?? '') : (request.testScript ?? '');
+
+  const handleChange = (value: string) => {
+    if (subTab === 'pre-request') {
+      updateRequest(request.id, { preRequestScript: value });
+    } else {
+      updateRequest(request.id, { testScript: value });
+    }
+  };
+
+  const insertSnippet = (code: string) => {
+    const newScript = currentScript ? `${currentScript}\n\n${code}` : code;
+    handleChange(newScript);
+  };
+
+  const chainEntries = Object.entries(chainVariables);
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Sub-tab selector */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setSubTab('pre-request')}
+          className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors cursor-pointer ${
+            subTab === 'pre-request'
+              ? 'bg-accent-blue text-white'
+              : 'bg-dark-700 text-dark-300 hover:text-dark-100'
+          }`}
+        >
+          Pre-request
+          {request.preRequestScript?.trim() && (
+            <span className="ml-1 w-1.5 h-1.5 bg-accent-green rounded-full inline-block" />
+          )}
+        </button>
+        <button
+          onClick={() => setSubTab('tests')}
+          className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors cursor-pointer ${
+            subTab === 'tests'
+              ? 'bg-accent-blue text-white'
+              : 'bg-dark-700 text-dark-300 hover:text-dark-100'
+          }`}
+        >
+          Tests
+          {request.testScript?.trim() && (
+            <span className="ml-1 w-1.5 h-1.5 bg-accent-green rounded-full inline-block" />
+          )}
+        </button>
+      </div>
+
+      {/* Description */}
+      <div className="text-xs text-dark-400">
+        {subTab === 'pre-request'
+          ? 'JavaScript that runs before the request is sent. Access the request via curlit.request and chain variables via curlit.chain.'
+          : 'JavaScript that runs after receiving the response. Use test(name, fn) and expect() for assertions. Save values via curlit.chain for request chaining.'}
+      </div>
+
+      {/* Snippet buttons */}
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-[10px] text-dark-400 mr-1">Snippets:</span>
+        {snippets.map(s => (
+          <button
+            key={s.label}
+            onClick={() => insertSnippet(s.code)}
+            className="px-2 py-1 text-[10px] rounded bg-dark-700 text-dark-300 hover:text-dark-100 hover:bg-dark-600 transition-colors cursor-pointer"
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Code editor */}
+      <div className="border border-dark-600 rounded-lg overflow-hidden h-[200px]">
+        <CodeMirror
+          value={currentScript}
+          onChange={handleChange}
+          extensions={[javascript()]}
+          theme={theme === 'dark' ? oneDark : 'light'}
+          height="200px"
+          placeholder={subTab === 'pre-request'
+            ? '// Modify request before sending\ncurlit.request.headers[\'X-Custom\'] = \'value\';'
+            : '// Write tests for the response\ntest(\'Status is 200\', () => {\n  expect(response.status).toBe(200);\n});'}
+          basicSetup={{
+            lineNumbers: true,
+            foldGutter: true,
+            bracketMatching: true,
+            closeBrackets: true,
+            autocompletion: true,
+          }}
+        />
+      </div>
+
+      {/* Chain variables display */}
+      {chainEntries.length > 0 && (
+        <div className="border border-dark-600 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-1.5 bg-dark-700 border-b border-dark-600">
+            <span className="text-[10px] font-medium text-dark-300 uppercase tracking-wide">
+              Chain Variables ({chainEntries.length})
+            </span>
+            <button
+              onClick={clearChainVariables}
+              className="text-[10px] text-dark-400 hover:text-accent-red transition-colors cursor-pointer"
+            >
+              Clear All
+            </button>
+          </div>
+          <div className="max-h-[100px] overflow-auto">
+            {chainEntries.map(([key, value]) => (
+              <div key={key} className="flex items-center px-3 py-1 border-b border-dark-700 last:border-0">
+                <span className="text-[11px] font-mono text-accent-blue mr-2 shrink-0">{`{{chain.${key}}}`}</span>
+                <span className="text-[11px] font-mono text-dark-200 truncate">{value}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}

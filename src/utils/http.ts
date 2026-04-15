@@ -111,49 +111,55 @@ export function buildBody(request: RequestConfig): string | FormData | File | nu
   }
 }
 
-export function resolveVariables(text: string, variables: Record<string, string>): string {
-  return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+export function resolveVariables(text: string, variables: Record<string, string>, chainVars?: Record<string, string>): string {
+  return text.replace(/\{\{([\w.]+)\}\}/g, (match, key: string) => {
+    // Support {{chain.varName}} for request chaining
+    if (key.startsWith('chain.') && chainVars) {
+      const chainKey = key.slice(6);
+      return chainVars[chainKey] ?? match;
+    }
     return variables[key] ?? match;
   });
 }
 
-export function resolveRequestVariables(request: RequestConfig, variables: Record<string, string>): RequestConfig {
+export function resolveRequestVariables(request: RequestConfig, variables: Record<string, string>, chainVars?: Record<string, string>): RequestConfig {
+  const rv = (text: string) => resolveVariables(text, variables, chainVars);
   return {
     ...request,
-    url: resolveVariables(request.url, variables),
+    url: rv(request.url),
     params: request.params.map(p => ({
       ...p,
-      key: resolveVariables(p.key, variables),
-      value: resolveVariables(p.value, variables),
+      key: rv(p.key),
+      value: rv(p.value),
     })),
     headers: request.headers.map(h => ({
       ...h,
-      key: resolveVariables(h.key, variables),
-      value: resolveVariables(h.value, variables),
+      key: rv(h.key),
+      value: rv(h.value),
     })),
     body: {
       ...request.body,
-      raw: resolveVariables(request.body.raw, variables),
+      raw: rv(request.body.raw),
       formData: request.body.formData.map(f => ({
         ...f,
-        key: resolveVariables(f.key, variables),
-        value: f.valueType === 'file' ? f.value : resolveVariables(f.value, variables),
+        key: rv(f.key),
+        value: f.valueType === 'file' ? f.value : rv(f.value),
       })),
       urlencoded: request.body.urlencoded.map(f => ({
         ...f,
-        key: resolveVariables(f.key, variables),
-        value: resolveVariables(f.value, variables),
+        key: rv(f.key),
+        value: rv(f.value),
       })),
       graphql: request.body.graphql ? {
-        query: resolveVariables(request.body.graphql.query, variables),
-        variables: resolveVariables(request.body.graphql.variables, variables),
+        query: rv(request.body.graphql.query),
+        variables: rv(request.body.graphql.variables),
         operationName: request.body.graphql.operationName
-          ? resolveVariables(request.body.graphql.operationName, variables) : undefined,
+          ? rv(request.body.graphql.operationName) : undefined,
         extensions: request.body.graphql.extensions
-          ? resolveVariables(request.body.graphql.extensions, variables) : undefined,
+          ? rv(request.body.graphql.extensions) : undefined,
       } : undefined,
     },
-    auth: resolveAuthVariables(request.auth, variables),
+    auth: resolveAuthVariables(request.auth, variables, chainVars),
   };
 }
 
@@ -173,22 +179,23 @@ export function resolveOAuth2Variables(
   };
 }
 
-function resolveAuthVariables(auth: AuthConfig, variables: Record<string, string>): AuthConfig {
+function resolveAuthVariables(auth: AuthConfig, variables: Record<string, string>, chainVars?: Record<string, string>): AuthConfig {
+  const rv = (text: string) => resolveVariables(text, variables, chainVars);
   const resolved = { ...auth };
   if (resolved.basic) {
     resolved.basic = {
-      username: resolveVariables(resolved.basic.username, variables),
-      password: resolveVariables(resolved.basic.password, variables),
+      username: rv(resolved.basic.username),
+      password: rv(resolved.basic.password),
     };
   }
   if (resolved.bearer) {
-    resolved.bearer = { token: resolveVariables(resolved.bearer.token, variables) };
+    resolved.bearer = { token: rv(resolved.bearer.token) };
   }
   if (resolved.apiKey) {
     resolved.apiKey = {
       ...resolved.apiKey,
-      key: resolveVariables(resolved.apiKey.key, variables),
-      value: resolveVariables(resolved.apiKey.value, variables),
+      key: rv(resolved.apiKey.key),
+      value: rv(resolved.apiKey.value),
     };
   }
   if (resolved.oauth2) {

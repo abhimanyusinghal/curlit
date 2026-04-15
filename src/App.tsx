@@ -210,8 +210,10 @@ function App() {
               {/* Response panel */}
               <div className="flex-1 overflow-hidden">
                 <ResponsePanel
+                  key={activeRequest.id}
                   response={activeResponse ?? null}
                   loading={!!activeLoading}
+                  requestId={activeRequest.id}
                 />
               </div>
             </>

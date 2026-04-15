@@ -5,7 +5,7 @@ import { xml } from '@codemirror/lang-xml';
 import { html } from '@codemirror/lang-html';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { search, openSearchPanel } from '@codemirror/search';
-import { Copy, Check, FileDown, Search } from 'lucide-react';
+import { Copy, Check, FileDown, Search, CircleCheck, CircleX, Terminal } from 'lucide-react';
 import type { ResponseData } from '../types';
 import { getStatusColor, formatBytes, formatTime, tryFormatJson } from '../utils/http';
 import { useAppStore } from '../store';
@@ -13,16 +13,29 @@ import { useAppStore } from '../store';
 interface Props {
   response: ResponseData | null;
   loading: boolean;
+  requestId: string;
 }
 
-type ResponseTab = 'body' | 'headers' | 'cookies';
+type ResponseTab = 'body' | 'headers' | 'cookies' | 'tests' | 'console';
 
-export function ResponsePanel({ response, loading }: Props) {
+export function ResponsePanel({ response, loading, requestId }: Props) {
   const [activeTab, setActiveTab] = useState<ResponseTab>('body');
   const [copied, setCopied] = useState(false);
   const [bodyFormat, setBodyFormat] = useState<'pretty' | 'raw'>('pretty');
   const theme = useAppStore(s => s.theme);
   const editorRef = useRef<ReactCodeMirrorRef>(null);
+  const testResults = useAppStore(s => s.testResults[requestId]);
+  const scriptLogs = useAppStore(s => s.scriptLogs[requestId]);
+
+  // Derive effective tab: fall back to 'body' if selected tab's data is gone.
+  // The parent component uses key={requestId} to remount this component when
+  // the request changes, which resets activeTab to 'body' automatically.
+  const testsAvailable = (testResults ?? []).length > 0;
+  const logsAvailable = (scriptLogs ?? []).length > 0;
+  const effectiveTab =
+    (activeTab === 'tests' && !testsAvailable) ? 'body' :
+    (activeTab === 'console' && !logsAvailable) ? 'body' :
+    activeTab;
 
   const handleSearch = useCallback(() => {
     const view = editorRef.current?.view;
@@ -96,10 +109,26 @@ export function ResponsePanel({ response, loading }: Props) {
     URL.revokeObjectURL(url);
   };
 
-  const tabs: { id: ResponseTab; label: string; count?: number }[] = [
+  const tests = testResults ?? [];
+  const logs = scriptLogs ?? [];
+  const passedTests = tests.filter(t => t.passed).length;
+  const failedTests = tests.filter(t => !t.passed).length;
+
+  const tabs: { id: ResponseTab; label: string; count?: number; color?: string }[] = [
     { id: 'body', label: 'Body' },
     { id: 'headers', label: 'Headers', count: Object.keys(response.headers).length },
     { id: 'cookies', label: 'Cookies', count: response.cookies.length },
+    ...(tests.length > 0 ? [{
+      id: 'tests' as const,
+      label: 'Tests',
+      count: tests.length,
+      color: failedTests > 0 ? 'text-accent-red' : 'text-accent-green',
+    }] : []),
+    ...(logs.length > 0 ? [{
+      id: 'console' as const,
+      label: 'Console',
+      count: logs.length,
+    }] : []),
   ];
 
   return (
@@ -113,14 +142,14 @@ export function ResponsePanel({ response, loading }: Props) {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === tab.id
+                effectiveTab === tab.id
                   ? 'text-dark-100 border-b-2 border-accent-blue pb-1'
                   : 'text-dark-300 hover:text-dark-200'
               }`}
             >
               {tab.label}
               {tab.count !== undefined && tab.count > 0 && (
-                <span className="ml-1 text-[10px] text-dark-400">({tab.count})</span>
+                <span className={`ml-1 text-[10px] ${tab.color || 'text-dark-400'}`}>({tab.count})</span>
               )}
             </button>
           ))}
@@ -139,7 +168,7 @@ export function ResponsePanel({ response, loading }: Props) {
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === 'body' && (
+        {effectiveTab === 'body' && (
           <div className="flex flex-col h-full">
             {/* Body toolbar */}
             <div className="flex items-center justify-between px-3 py-1.5 border-b border-dark-700">
@@ -227,7 +256,7 @@ export function ResponsePanel({ response, loading }: Props) {
           </div>
         )}
 
-        {activeTab === 'headers' && (
+        {effectiveTab === 'headers' && (
           <div className="overflow-auto p-3">
             <table className="w-full text-sm">
               <thead>
@@ -251,7 +280,7 @@ export function ResponsePanel({ response, loading }: Props) {
           </div>
         )}
 
-        {activeTab === 'cookies' && (
+        {effectiveTab === 'cookies' && (
           <div className="overflow-auto p-3">
             <table className="w-full text-sm">
               <thead>
@@ -275,6 +304,81 @@ export function ResponsePanel({ response, loading }: Props) {
             </table>
             {response.cookies.length === 0 && (
               <div className="text-dark-400 text-sm text-center py-8">No cookies in response</div>
+            )}
+          </div>
+        )}
+
+        {effectiveTab === 'tests' && (
+          <div className="overflow-auto p-3">
+            {/* Summary bar */}
+            <div className="flex items-center gap-4 mb-3 px-2 py-2 bg-dark-800 rounded-lg">
+              <span className="text-xs font-medium text-dark-300">
+                {tests.length} test{tests.length !== 1 ? 's' : ''}
+              </span>
+              {passedTests > 0 && (
+                <span className="flex items-center gap-1 text-xs text-accent-green">
+                  <CircleCheck size={12} /> {passedTests} passed
+                </span>
+              )}
+              {failedTests > 0 && (
+                <span className="flex items-center gap-1 text-xs text-accent-red">
+                  <CircleX size={12} /> {failedTests} failed
+                </span>
+              )}
+            </div>
+
+            {/* Test list */}
+            <div className="flex flex-col gap-1">
+              {tests.map((t, i) => (
+                <div
+                  key={i}
+                  className={`flex items-start gap-2 px-3 py-2 rounded-lg border ${
+                    t.passed
+                      ? 'bg-accent-green/5 border-accent-green/20'
+                      : 'bg-accent-red/5 border-accent-red/20'
+                  }`}
+                >
+                  {t.passed ? (
+                    <CircleCheck size={14} className="text-accent-green mt-0.5 shrink-0" />
+                  ) : (
+                    <CircleX size={14} className="text-accent-red mt-0.5 shrink-0" />
+                  )}
+                  <div className="flex flex-col gap-0.5">
+                    <span className={`text-xs font-medium ${t.passed ? 'text-accent-green' : 'text-accent-red'}`}>
+                      {t.name}
+                    </span>
+                    {t.error && (
+                      <span className="text-[11px] text-dark-300 font-mono">{t.error}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {effectiveTab === 'console' && (
+          <div className="overflow-auto p-3">
+            <div className="flex flex-col gap-0.5 font-mono text-xs">
+              {logs.map((entry, i) => (
+                <div
+                  key={i}
+                  className={`flex items-start gap-2 px-2 py-1 rounded ${
+                    entry.type === 'error' ? 'bg-accent-red/10 text-accent-red' :
+                    entry.type === 'warn' ? 'bg-accent-yellow/10 text-accent-yellow' :
+                    entry.type === 'info' ? 'text-accent-blue' :
+                    'text-dark-200'
+                  }`}
+                >
+                  <Terminal size={12} className="mt-0.5 shrink-0 opacity-50" />
+                  <span className="whitespace-pre-wrap break-all">
+                    {entry.args.map(a => typeof a === 'string' ? a : JSON.stringify(a, null, 2)).join(' ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {logs.length === 0 && (
+              <div className="text-dark-400 text-sm text-center py-8">No console output</div>
             )}
           </div>
         )}
