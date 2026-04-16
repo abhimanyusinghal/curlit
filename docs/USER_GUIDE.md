@@ -195,6 +195,31 @@ Pre-request and test scripts are stripped from imported requests as a safety mea
 
 ---
 
+## Sharing Requests by Link
+
+Encode the current request into a URL you can share in chat, docs, or tickets. The recipient clicks the link and the request opens in a new tab.
+
+### Generating a Share Link
+
+1. Click **Share** in the header
+2. By default, the link excludes **auth credentials** and **pre-request / test scripts**
+3. Click **Copy Link**
+
+### Including Secrets (Opt-In)
+
+Tick **Include secrets** to embed auth credentials and scripts in the link. The modal shows a warning when this is on -- the encoded payload becomes part of the URL, which means anywhere the link is pasted (chat, tickets, screenshots, browser history) carries those credentials.
+
+Leave this off unless you're sharing with someone you trust over a channel you trust.
+
+### How It Works
+
+- Everything is encoded in the URL fragment (`#share=...`) so the payload never reaches the proxy server or any HTTP logs.
+- Form-data file attachments can't travel through a URL; those fields are converted to empty text entries on the recipient side.
+- Incoming links always have pre-request / test scripts stripped on the import side, even if the sender opted in.
+- Links are capped by whatever your chat/email client will accept. For very large requests the modal shows a warning -- send a backup file instead.
+
+---
+
 ## cURL Integration
 
 ### Importing a cURL Command
