@@ -244,6 +244,59 @@ app.post('/api/oauth/token', async (req, res) => {
   }
 });
 
+// ─── GitHub Sync: device flow + status ────────────────────────────────────────
+// Client ID comes from env so it stays off the wire from the browser, mirroring
+// how /api/oauth/token keeps user-provided secrets server-side.
+app.get('/api/github/status', (_req, res) => {
+  res.json({ configured: !!process.env.GITHUB_CLIENT_ID });
+});
+
+app.post('/api/github/device-code', async (_req, res) => {
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  if (!clientId) {
+    return res.status(501).json({ error: 'GITHUB_CLIENT_ID not configured on server' });
+  }
+  try {
+    const response = await fetch('https://github.com/login/device/code', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: clientId, scope: 'gist' }).toString(),
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    const cause = error.cause || error;
+    res.status(500).json({ error: cause.message || 'Device code request failed' });
+  }
+});
+
+app.post('/api/github/device-token', async (req, res) => {
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  if (!clientId) {
+    return res.status(501).json({ error: 'GITHUB_CLIENT_ID not configured on server' });
+  }
+  const { deviceCode } = req.body;
+  if (!deviceCode) {
+    return res.status(400).json({ error: 'deviceCode is required' });
+  }
+  try {
+    const response = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        device_code: deviceCode,
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      }).toString(),
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    const cause = error.cause || error;
+    res.status(500).json({ error: cause.message || 'Device token poll failed' });
+  }
+});
+
 // Export app for testing
 export { app };
 
