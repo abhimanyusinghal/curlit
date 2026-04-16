@@ -476,6 +476,79 @@ describe('Backup / Restore', () => {
   });
 });
 
+// ─── Sync (GitHub Gist) ──────────────────────────────────────────────────────
+
+describe('Sync', () => {
+  it('setSyncToken persists token and updates state', () => {
+    useAppStore.getState().setSyncToken('ghs_abc');
+    expect(useAppStore.getState().syncToken).toBe('ghs_abc');
+    expect(JSON.parse(localStorage.getItem('curlit_sync_token')!)).toBe('ghs_abc');
+  });
+
+  it('setSyncGistId persists gist id', () => {
+    useAppStore.getState().setSyncGistId('g-123');
+    expect(useAppStore.getState().syncGistId).toBe('g-123');
+    expect(JSON.parse(localStorage.getItem('curlit_sync_gist_id')!)).toBe('g-123');
+  });
+
+  it('setSyncLastSyncedAt persists timestamp', () => {
+    useAppStore.getState().setSyncLastSyncedAt(1700000000000);
+    expect(useAppStore.getState().syncLastSyncedAt).toBe(1700000000000);
+    expect(JSON.parse(localStorage.getItem('curlit_sync_last_synced_at')!)).toBe(1700000000000);
+  });
+
+  it('clearSyncToken wipes all three sync keys', () => {
+    useAppStore.getState().setSyncToken('ghs_abc');
+    useAppStore.getState().setSyncGistId('g-1');
+    useAppStore.getState().setSyncLastSyncedAt(123);
+
+    useAppStore.getState().clearSyncToken();
+
+    const state = useAppStore.getState();
+    expect(state.syncToken).toBeNull();
+    expect(state.syncGistId).toBeNull();
+    expect(state.syncLastSyncedAt).toBeNull();
+    expect(JSON.parse(localStorage.getItem('curlit_sync_token')!)).toBeNull();
+    expect(JSON.parse(localStorage.getItem('curlit_sync_gist_id')!)).toBeNull();
+    expect(JSON.parse(localStorage.getItem('curlit_sync_last_synced_at')!)).toBeNull();
+  });
+
+  it('getSyncSnapshot returns ONLY collections, environments, activeEnvironmentId', () => {
+    useAppStore.getState().createCollection('Col');
+    useAppStore.getState().createEnvironment('Env');
+    useAppStore.getState().addToHistory(createDefaultRequest({ url: 'https://h.com' }), null);
+    useAppStore.getState().updateChainVariables({ x: 'y' });
+
+    const snapshot = useAppStore.getState().getSyncSnapshot();
+    expect(Object.keys(snapshot).sort()).toEqual(['activeEnvironmentId', 'collections', 'environments']);
+    expect(snapshot.collections).toHaveLength(1);
+    expect(snapshot.environments).toHaveLength(1);
+  });
+
+  it('applySyncSnapshot writes collections/envs/active env through to store and localStorage', () => {
+    useAppStore.getState().createCollection('Will be replaced');
+    useAppStore.getState().addToHistory(createDefaultRequest({ url: 'https://keep.com' }), null);
+
+    useAppStore.getState().applySyncSnapshot({
+      collections: [{ id: 'c1', name: 'From Cloud', requests: [], createdAt: 1, updatedAt: 1 }],
+      environments: [{ id: 'e1', name: 'From Cloud', variables: [], isActive: false }],
+      activeEnvironmentId: 'e1',
+    });
+
+    const state = useAppStore.getState();
+    expect(state.collections.map(c => c.name)).toEqual(['From Cloud']);
+    expect(state.environments.map(e => e.name)).toEqual(['From Cloud']);
+    expect(state.activeEnvironmentId).toBe('e1');
+    // History untouched by sync
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0].request.url).toBe('https://keep.com');
+
+    expect(JSON.parse(localStorage.getItem('curlit_collections')!)[0].name).toBe('From Cloud');
+    expect(JSON.parse(localStorage.getItem('curlit_environments')!)[0].name).toBe('From Cloud');
+    expect(JSON.parse(localStorage.getItem('curlit_active_env')!)).toBe('e1');
+  });
+});
+
 // ─── localStorage Persistence ────────────────────────────────────────────────
 
 describe('localStorage Persistence', () => {

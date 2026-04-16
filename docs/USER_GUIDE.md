@@ -220,6 +220,47 @@ Leave this off unless you're sharing with someone you trust over a channel you t
 
 ---
 
+## Cloud Sync (GitHub Gist)
+
+Sync your **collections and environments** across devices via a private Gist on your own GitHub account. Only those two are synced -- history, chain variables, and theme stay local.
+
+### One-Time Setup (Maintainer)
+
+The CurlIt maintainer (or self-hoster) needs to register a GitHub OAuth app:
+
+1. Go to https://github.com/settings/developers -> **New OAuth App**
+2. Application name: anything (e.g. "CurlIt")
+3. Homepage URL: wherever the app is hosted
+4. **Enable Device Flow** in the app's settings after creation
+5. Copy the **Client ID**, then start the proxy with it in the environment:
+
+   ```bash
+   GITHUB_CLIENT_ID=Iv1.xxxxx node server/proxy.js
+   ```
+
+If `GITHUB_CLIENT_ID` isn't set, the Sync modal shows a clear "not configured" state and sign-in is hidden.
+
+### Signing In
+
+1. Click **Sync** in the header
+2. Click **Sign in with GitHub**
+3. A short code appears. Open the GitHub link, paste the code, and authorize CurlIt's `gist` scope
+4. The modal flips to the signed-in view showing `@yourhandle` and your data counts
+
+### Syncing
+
+- **Sync Now** pushes the current collections + environments to your Gist (creates one named `curlit-sync.json` on first push; updates it on subsequent pushes).
+- **Pull from Cloud** fetches the Gist and shows a preview. Pick **Merge** (default; adds with fresh IDs, nothing is overwritten) or **Replace** (confirmation required; overwrites local collections/envs).
+- A second device finds the same Gist automatically by filename -- no Gist URL to copy around.
+
+### Safety Notes
+
+- Environment values are stored **plaintext** in your private Gist. Avoid syncing real production secrets until client-side encryption is added (a follow-up).
+- Pre-request and test scripts are stripped on pull, consistent with backup and share-link imports.
+- Sign out clears the OAuth token, Gist id, and last-synced timestamp from your local storage. Your Gist on GitHub is left alone -- delete it there if you want to fully revoke.
+
+---
+
 ## cURL Integration
 
 ### Importing a cURL Command

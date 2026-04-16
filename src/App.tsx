@@ -13,6 +13,7 @@ import {
   Moon,
   Archive,
   Share2,
+  Cloud,
 } from 'lucide-react';
 import { useAppStore } from './store';
 import { RequestTabs } from './components/RequestTabs';
@@ -26,6 +27,7 @@ import { OpenApiImportModal } from './components/OpenApiImportModal';
 import { SaveRequestModal } from './components/SaveRequestModal';
 import { BackupModal } from './components/BackupModal';
 import { ShareRequestModal } from './components/ShareRequestModal';
+import { SyncModal } from './components/SyncModal';
 import { useResizable } from './hooks/useResizable';
 import { disconnectWebSocket } from './utils/websocket';
 import { readShareFromLocation, sharedRequestToTabSeed } from './utils/share';
@@ -49,6 +51,7 @@ function App() {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [showSync, setShowSync] = useState(false);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
   const activeRequest = activeTab ? requests[activeTab.requestId] : null;
@@ -189,6 +192,14 @@ function App() {
           )}
 
           <button
+            onClick={() => setShowSync(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded-md transition-colors cursor-pointer"
+            title="Cloud sync via GitHub Gist"
+          >
+            <Cloud size={13} />
+            Sync
+          </button>
+          <button
             onClick={() => setShowBackup(true)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded-md transition-colors cursor-pointer"
             title="Backup & Restore all data"
@@ -311,6 +322,7 @@ function App() {
       <SaveRequestModal open={showSaveModal} onClose={() => setShowSaveModal(false)} />
       <BackupModal open={showBackup} onClose={() => setShowBackup(false)} />
       <ShareRequestModal open={showShare} onClose={() => setShowShare(false)} request={activeRequest} />
+      <SyncModal open={showSync} onClose={() => setShowSync(false)} />
     </div>
   );
 }

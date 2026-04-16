@@ -55,7 +55,7 @@
 
 - [x] Export/import all data (full backup as single JSON)
 - [x] Shareable request links (encoded in URL)
-- [ ] Optional cloud sync via GitHub Gist or a self-hosted backend
+- [x] Optional cloud sync via GitHub Gist or a self-hosted backend
 - [ ] Team workspaces with shared collections
 - [ ] Real-time collaboration (conflict-free editing)
 

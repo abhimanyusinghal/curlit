@@ -25,6 +25,9 @@ const STORAGE_KEYS = {
   activeEnv: 'curlit_active_env',
   theme: 'curlit_theme',
   chainVariables: 'curlit_chain_vars',
+  syncToken: 'curlit_sync_token',
+  syncGistId: 'curlit_sync_gist_id',
+  syncLastSyncedAt: 'curlit_sync_last_synced_at',
 };
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -74,6 +77,11 @@ interface AppState {
 
   // WebSocket
   webSocketSessions: Record<string, WebSocketSession>;
+
+  // Sync (GitHub Gist)
+  syncToken: string | null;
+  syncGistId: string | null;
+  syncLastSyncedAt: number | null;
 
   // UI
   theme: Theme;
@@ -128,6 +136,16 @@ interface AppState {
   saveActiveRequest: () => 'saved' | 'needs-collection';
   markTabSaved: (tabId: string, collectionId: string, sourceRequestId: string) => void;
 
+  // Actions - Sync
+  setSyncToken: (token: string | null) => void;
+  clearSyncToken: () => void;
+  setSyncGistId: (id: string | null) => void;
+  setSyncLastSyncedAt: (timestamp: number | null) => void;
+  getSyncSnapshot: () => { collections: Collection[]; environments: Environment[]; activeEnvironmentId: string | null };
+  applySyncSnapshot: (
+    next: { collections: Collection[]; environments: Environment[]; activeEnvironmentId: string | null },
+  ) => void;
+
   // Actions - Backup
   getBackupSnapshot: () => BackupSnapshot;
   importBackup: (backup: BackupData, mode: ImportMode) => void;
@@ -164,6 +182,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   scriptLogs: {},
   chainVariables: loadFromStorage<Record<string, string>>(STORAGE_KEYS.chainVariables, {}),
   webSocketSessions: {},
+  syncToken: loadFromStorage<string | null>(STORAGE_KEYS.syncToken, null),
+  syncGistId: loadFromStorage<string | null>(STORAGE_KEYS.syncGistId, null),
+  syncLastSyncedAt: loadFromStorage<number | null>(STORAGE_KEYS.syncLastSyncedAt, null),
   theme: loadFromStorage<Theme>(STORAGE_KEYS.theme, 'dark'),
   sidebarView: 'collections',
   sidebarOpen: true,
@@ -643,6 +664,44 @@ export const useAppStore = create<AppState>((set, get) => ({
       history: next.history,
       chainVariables: next.chainVariables,
       theme: next.theme,
+    });
+  },
+
+  // Sync actions
+  setSyncToken: (token) => {
+    saveToStorage(STORAGE_KEYS.syncToken, token);
+    set({ syncToken: token });
+  },
+  clearSyncToken: () => {
+    saveToStorage(STORAGE_KEYS.syncToken, null);
+    saveToStorage(STORAGE_KEYS.syncGistId, null);
+    saveToStorage(STORAGE_KEYS.syncLastSyncedAt, null);
+    set({ syncToken: null, syncGistId: null, syncLastSyncedAt: null });
+  },
+  setSyncGistId: (id) => {
+    saveToStorage(STORAGE_KEYS.syncGistId, id);
+    set({ syncGistId: id });
+  },
+  setSyncLastSyncedAt: (timestamp) => {
+    saveToStorage(STORAGE_KEYS.syncLastSyncedAt, timestamp);
+    set({ syncLastSyncedAt: timestamp });
+  },
+  getSyncSnapshot: () => {
+    const state = get();
+    return {
+      collections: state.collections,
+      environments: state.environments,
+      activeEnvironmentId: state.activeEnvironmentId,
+    };
+  },
+  applySyncSnapshot: (next) => {
+    saveToStorage(STORAGE_KEYS.collections, next.collections);
+    saveToStorage(STORAGE_KEYS.environments, next.environments);
+    saveToStorage(STORAGE_KEYS.activeEnv, next.activeEnvironmentId);
+    set({
+      collections: next.collections,
+      environments: next.environments,
+      activeEnvironmentId: next.activeEnvironmentId,
     });
   },
 

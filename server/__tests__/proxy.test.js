@@ -106,3 +106,91 @@ describe('OAuth Token Endpoint', () => {
     expect(res.body.error).toBeDefined();
   });
 });
+
+describe('GitHub Sync Endpoints', () => {
+  const ORIGINAL_FETCH = global.fetch;
+  const ORIGINAL_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
+
+  afterAll(() => {
+    global.fetch = ORIGINAL_FETCH;
+    if (ORIGINAL_CLIENT_ID === undefined) delete process.env.GITHUB_CLIENT_ID;
+    else process.env.GITHUB_CLIENT_ID = ORIGINAL_CLIENT_ID;
+  });
+
+  describe('GET /api/github/status', () => {
+    it('reports unconfigured when GITHUB_CLIENT_ID is absent', async () => {
+      delete process.env.GITHUB_CLIENT_ID;
+      const res = await request.get('/api/github/status');
+      expect(res.status).toBe(200);
+      expect(res.body.configured).toBe(false);
+    });
+
+    it('reports configured when GITHUB_CLIENT_ID is set', async () => {
+      process.env.GITHUB_CLIENT_ID = 'test-client-id';
+      const res = await request.get('/api/github/status');
+      expect(res.body.configured).toBe(true);
+    });
+  });
+
+  describe('POST /api/github/device-code', () => {
+    it('returns 501 when GITHUB_CLIENT_ID is not configured', async () => {
+      delete process.env.GITHUB_CLIENT_ID;
+      const res = await request.post('/api/github/device-code').send({});
+      expect(res.status).toBe(501);
+      expect(res.body.error).toMatch(/not configured/);
+    });
+
+    it('proxies GitHub response and includes scope=gist', async () => {
+      process.env.GITHUB_CLIENT_ID = 'test-client-id';
+      let capturedBody = null;
+      global.fetch = vi.fn(async (_url, init) => {
+        capturedBody = init.body;
+        return {
+          status: 200,
+          json: async () => ({
+            device_code: 'abc',
+            user_code: 'WXYZ-1234',
+            verification_uri: 'https://github.com/login/device',
+            expires_in: 900,
+            interval: 5,
+          }),
+        };
+      });
+      const res = await request.post('/api/github/device-code').send({});
+      expect(res.status).toBe(200);
+      expect(res.body.user_code).toBe('WXYZ-1234');
+      expect(capturedBody).toContain('client_id=test-client-id');
+      expect(capturedBody).toContain('scope=gist');
+    });
+  });
+
+  describe('POST /api/github/device-token', () => {
+    it('returns 400 when deviceCode is missing', async () => {
+      process.env.GITHUB_CLIENT_ID = 'test-client-id';
+      const res = await request.post('/api/github/device-token').send({});
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('deviceCode is required');
+    });
+
+    it('forwards authorization_pending response transparently', async () => {
+      process.env.GITHUB_CLIENT_ID = 'test-client-id';
+      global.fetch = vi.fn(async () => ({
+        status: 200,
+        json: async () => ({ error: 'authorization_pending' }),
+      }));
+      const res = await request.post('/api/github/device-token').send({ deviceCode: 'dc' });
+      expect(res.status).toBe(200);
+      expect(res.body.error).toBe('authorization_pending');
+    });
+
+    it('returns access token on success', async () => {
+      process.env.GITHUB_CLIENT_ID = 'test-client-id';
+      global.fetch = vi.fn(async () => ({
+        status: 200,
+        json: async () => ({ access_token: 'ghs_xyz', token_type: 'bearer', scope: 'gist' }),
+      }));
+      const res = await request.post('/api/github/device-token').send({ deviceCode: 'dc' });
+      expect(res.body.access_token).toBe('ghs_xyz');
+    });
+  });
+});
