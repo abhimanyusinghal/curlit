@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -12,6 +12,7 @@ import {
   Sun,
   Moon,
   Archive,
+  Share2,
 } from 'lucide-react';
 import { useAppStore } from './store';
 import { RequestTabs } from './components/RequestTabs';
@@ -24,8 +25,10 @@ import { CurlExportModal } from './components/CurlExportModal';
 import { OpenApiImportModal } from './components/OpenApiImportModal';
 import { SaveRequestModal } from './components/SaveRequestModal';
 import { BackupModal } from './components/BackupModal';
+import { ShareRequestModal } from './components/ShareRequestModal';
 import { useResizable } from './hooks/useResizable';
 import { disconnectWebSocket } from './utils/websocket';
+import { readShareFromLocation, sharedRequestToTabSeed } from './utils/share';
 
 function App() {
   const activeTabId = useAppStore(s => s.activeTabId);
@@ -45,6 +48,7 @@ function App() {
   const [showOpenApiImport, setShowOpenApiImport] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
   const activeRequest = activeTab ? requests[activeTab.requestId] : null;
@@ -124,6 +128,32 @@ function App() {
     return () => window.removeEventListener('beforeunload', cleanup);
   }, []);
 
+  // Open incoming shared request links (#share=...) as a new tab. Runs on
+  // mount and on hashchange (for same-tab navigations where the hash changes
+  // without a reload).
+  const initialShareProcessedRef = useRef(false);
+  useEffect(() => {
+    const importFromHash = () => {
+      try {
+        const payload = readShareFromLocation();
+        if (payload) {
+          useAppStore.getState().addTab(sharedRequestToTabSeed(payload));
+        }
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Could not open share link');
+      }
+    };
+
+    // Mount-time check, guarded against React StrictMode double-invoke in dev
+    if (!initialShareProcessedRef.current) {
+      initialShareProcessedRef.current = true;
+      importFromHash();
+    }
+
+    window.addEventListener('hashchange', importFromHash);
+    return () => window.removeEventListener('hashchange', importFromHash);
+  }, []);
+
   return (
     <div className="flex flex-col h-full bg-dark-900">
       {/* Top bar */}
@@ -189,6 +219,15 @@ function App() {
           >
             <FileCode size={13} />
             Export cURL
+          </button>
+          <button
+            onClick={() => setShowShare(true)}
+            disabled={!activeRequest}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Share request as a link"
+          >
+            <Share2 size={13} />
+            Share
           </button>
         </div>
       </header>
@@ -271,6 +310,7 @@ function App() {
       <OpenApiImportModal open={showOpenApiImport} onClose={() => setShowOpenApiImport(false)} />
       <SaveRequestModal open={showSaveModal} onClose={() => setShowSaveModal(false)} />
       <BackupModal open={showBackup} onClose={() => setShowBackup(false)} />
+      <ShareRequestModal open={showShare} onClose={() => setShowShare(false)} request={activeRequest} />
     </div>
   );
 }
