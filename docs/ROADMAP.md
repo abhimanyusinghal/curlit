@@ -56,12 +56,12 @@
 - [x] Export/import all data (full backup as single JSON)
 - [x] Shareable request links (encoded in URL)
 - [x] Optional cloud sync via GitHub Gist or a self-hosted backend
-- [ ] Team workspaces with shared collections
-- [ ] Real-time collaboration (conflict-free editing)
+- [x] Collection runner -- execute all requests in a collection sequentially
 
 ### v1.4 -- Performance & Testing
 
-- [x] Collection runner -- execute all requests in a collection sequentially
+- [ ] Team workspaces with shared collections
+- [ ] Real-time collaboration (conflict-free editing)
 - [ ] Performance benchmarking -- run a request N times, report avg/p95/p99
 - [ ] Response diffing -- compare two responses side-by-side
 - [ ] Mock server -- define mock responses for endpoints
