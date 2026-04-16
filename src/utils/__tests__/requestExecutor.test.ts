@@ -91,13 +91,43 @@ describe('executeRequestWithScripts — test scripts', () => {
     expect(result.testResults[1].passed).toBe(false);
   });
 
-  it('does NOT flag 4xx/5xx as failure on its own (tests are authoritative)', async () => {
+  it('flags 5xx as failed when no test script is defined', async () => {
     mockSend.mockResolvedValueOnce({ ...okResponse(), status: 500, statusText: 'Internal Server Error' });
     const result = await executeRequestWithScripts(
       createDefaultRequest({ url: 'https://api.test/x' }),
       { variables: {}, chainVars: {} },
     );
-    expect(result.outcome).toBe('passed'); // no tests, no assertions = no failure
+    expect(result.outcome).toBe('failed');
+  });
+
+  it('flags 4xx as failed when no test script is defined', async () => {
+    mockSend.mockResolvedValueOnce({ ...okResponse(), status: 404, statusText: 'Not Found' });
+    const result = await executeRequestWithScripts(
+      createDefaultRequest({ url: 'https://api.test/x' }),
+      { variables: {}, chainVars: {} },
+    );
+    expect(result.outcome).toBe('failed');
+  });
+
+  it('lets a test script override status-based failure (user expects the 404)', async () => {
+    mockSend.mockResolvedValueOnce({ ...okResponse(), status: 404, statusText: 'Not Found' });
+    const result = await executeRequestWithScripts(
+      createDefaultRequest({
+        url: 'https://api.test/x',
+        testScript: 'curlit.test("404 is expected", () => { if (curlit.response.status !== 404) throw new Error("nope"); });',
+      }),
+      { variables: {}, chainVars: {} },
+    );
+    expect(result.outcome).toBe('passed');
+  });
+
+  it('still treats 3xx as passed (not a failure)', async () => {
+    mockSend.mockResolvedValueOnce({ ...okResponse(), status: 301, statusText: 'Moved Permanently' });
+    const result = await executeRequestWithScripts(
+      createDefaultRequest({ url: 'https://api.test/x' }),
+      { variables: {}, chainVars: {} },
+    );
+    expect(result.outcome).toBe('passed');
   });
 });
 
@@ -170,6 +200,39 @@ describe('executeRequestWithScripts — error paths', () => {
       { variables: {}, chainVars: {} },
     );
     expect(result.response.body).toBe('Gateway timeout');
+  });
+
+  it('treats a status-0 response from the proxy as an error (e.g. SSL or target-unreachable)', async () => {
+    mockSend.mockResolvedValueOnce({
+      status: 0,
+      statusText: 'Error',
+      headers: {},
+      body: 'unable to verify the first certificate',
+      size: 0,
+      time: 14,
+      cookies: [],
+    });
+    const result = await executeRequestWithScripts(
+      createDefaultRequest({ url: 'https://untrusted.test/x' }),
+      { variables: {}, chainVars: {} },
+    );
+    expect(result.outcome).toBe('error');
+    expect(result.error).toContain('unable to verify');
+  });
+
+  it('does NOT run test scripts when status is 0', async () => {
+    mockSend.mockResolvedValueOnce({
+      status: 0, statusText: 'Error', headers: {}, body: 'boom', size: 0, time: 5, cookies: [],
+    });
+    const result = await executeRequestWithScripts(
+      createDefaultRequest({
+        url: 'https://api.test/x',
+        testScript: 'curlit.test("should not run", () => {});',
+      }),
+      { variables: {}, chainVars: {} },
+    );
+    expect(result.testResults).toEqual([]);
+    expect(result.outcome).toBe('error');
   });
 });
 

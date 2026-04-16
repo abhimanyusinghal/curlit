@@ -153,12 +153,30 @@ export async function executeRequestWithScripts(
     };
   }
 
+  // Status 0 from the proxy means the target request failed at the network /
+  // SSL / validation layer — the proxy itself returned 200 but wrapped a
+  // failure in the JSON payload (e.g. `{ status: 0, statusText: 'Error',
+  // body: 'unable to verify the first certificate' }`). Treat that the same
+  // as a thrown network error: skip test scripts and classify as 'error'.
+  if (response.status === 0) {
+    return {
+      resolvedRequest: resolved,
+      response,
+      testResults: [],
+      chainVarUpdates,
+      logs,
+      error: response.body || response.statusText || 'Network error',
+      outcome: 'error',
+    };
+  }
+
   // --- Post-response test script ---
   let testResults: TestResult[] = [];
-  if (request.testScript?.trim() && response.status !== 0) {
+  const hasTestScript = !!request.testScript?.trim();
+  if (hasTestScript) {
     // Merge in any chain-var updates from pre-request so tests see them.
     const chainForTests = { ...ctx.chainVars, ...chainVarUpdates };
-    const testResult = runTestScript(request.testScript, resolved, response, chainForTests);
+    const testResult = runTestScript(request.testScript!, resolved, response, chainForTests);
     logs.push(...testResult.logs);
     testResults = testResult.tests;
     Object.assign(chainVarUpdates, testResult.chain);
@@ -172,8 +190,17 @@ export async function executeRequestWithScripts(
     }
   }
 
-  const anyTestFailed = testResults.some(t => !t.passed);
-  const outcome: ExecuteOutcome = anyTestFailed ? 'failed' : 'passed';
+  // Outcome rules:
+  //  - If tests exist, they are authoritative (any failing test = failed).
+  //  - Otherwise, fall back to HTTP status: 4xx/5xx without a test script
+  //    counts as failed so collection-runner rows don't green-check an error
+  //    response the user hasn't explicitly blessed.
+  let outcome: ExecuteOutcome;
+  if (hasTestScript) {
+    outcome = testResults.some(t => !t.passed) ? 'failed' : 'passed';
+  } else {
+    outcome = response.status >= 400 ? 'failed' : 'passed';
+  }
 
   return {
     resolvedRequest: resolved,
