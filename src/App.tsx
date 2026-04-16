@@ -11,6 +11,7 @@ import {
   GripHorizontal,
   Sun,
   Moon,
+  Archive,
 } from 'lucide-react';
 import { useAppStore } from './store';
 import { RequestTabs } from './components/RequestTabs';
@@ -22,6 +23,7 @@ import { CurlImportModal } from './components/CurlImportModal';
 import { CurlExportModal } from './components/CurlExportModal';
 import { OpenApiImportModal } from './components/OpenApiImportModal';
 import { SaveRequestModal } from './components/SaveRequestModal';
+import { BackupModal } from './components/BackupModal';
 import { useResizable } from './hooks/useResizable';
 import { disconnectWebSocket } from './utils/websocket';
 
@@ -42,6 +44,7 @@ function App() {
   const [showCurlExport, setShowCurlExport] = useState(false);
   const [showOpenApiImport, setShowOpenApiImport] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
   const activeRequest = activeTab ? requests[activeTab.requestId] : null;
@@ -156,6 +159,14 @@ function App() {
           )}
 
           <button
+            onClick={() => setShowBackup(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded-md transition-colors cursor-pointer"
+            title="Backup & Restore all data"
+          >
+            <Archive size={13} />
+            Backup
+          </button>
+          <button
             onClick={() => setShowOpenApiImport(true)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded-md transition-colors cursor-pointer"
             title="Import OpenAPI / Swagger"
@@ -259,6 +270,7 @@ function App() {
       <CurlExportModal open={showCurlExport} onClose={() => setShowCurlExport(false)} request={activeRequest} />
       <OpenApiImportModal open={showOpenApiImport} onClose={() => setShowOpenApiImport(false)} />
       <SaveRequestModal open={showSaveModal} onClose={() => setShowSaveModal(false)} />
+      <BackupModal open={showBackup} onClose={() => setShowBackup(false)} />
     </div>
   );
 }

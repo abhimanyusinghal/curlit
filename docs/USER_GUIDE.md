@@ -172,6 +172,29 @@ History is limited to the last 100 requests.
 
 ---
 
+## Backup & Restore
+
+Export all your CurlIt data (collections, environments, history, chain variables, and theme) as a single JSON file, and restore it later or on another machine.
+
+### Exporting a Backup
+
+1. Click **Backup** in the header
+2. Review the summary (number of collections, requests, environments, history)
+3. Click **Download Backup** -- a file named `curlit-backup-YYYY-MM-DD.json` is saved
+
+### Importing a Backup
+
+1. Click **Backup** in the header and switch to the **Import** tab
+2. Choose a backup file with **Choose File**, or paste the JSON
+3. Click **Validate** to preview the contents
+4. Pick an import mode and confirm:
+   - **Merge** (default): append to existing data; incoming collections and environments get fresh IDs so nothing is overwritten
+   - **Replace**: discard all current data and restore exactly what's in the backup
+
+Pre-request and test scripts are stripped from imported requests as a safety measure, consistent with collection imports.
+
+---
+
 ## cURL Integration
 
 ### Importing a cURL Command

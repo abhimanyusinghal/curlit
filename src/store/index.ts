@@ -15,6 +15,8 @@ import type {
 } from '../types';
 import { createDefaultRequest, createDefaultWebSocketSession } from '../types';
 import { removeFilesForRequest } from '../utils/fileStore';
+import type { BackupData, BackupSnapshot, ImportMode } from '../utils/backup';
+import { applyBackup } from '../utils/backup';
 
 const STORAGE_KEYS = {
   collections: 'curlit_collections',
@@ -125,6 +127,10 @@ interface AppState {
   // Actions - Save
   saveActiveRequest: () => 'saved' | 'needs-collection';
   markTabSaved: (tabId: string, collectionId: string, sourceRequestId: string) => void;
+
+  // Actions - Backup
+  getBackupSnapshot: () => BackupSnapshot;
+  importBackup: (backup: BackupData, mode: ImportMode) => void;
 
   // Actions - UI
   setTheme: (theme: Theme) => void;
@@ -592,6 +598,52 @@ export const useAppStore = create<AppState>((set, get) => ({
         t.id === tabId ? { ...t, collectionId, sourceRequestId, isModified: false } : t
       ),
     }));
+  },
+
+  // Backup actions
+  getBackupSnapshot: () => {
+    const state = get();
+    return {
+      collections: state.collections,
+      environments: state.environments,
+      activeEnvironmentId: state.activeEnvironmentId,
+      history: state.history,
+      chainVariables: state.chainVariables,
+      theme: state.theme,
+    };
+  },
+
+  importBackup: (backup, mode) => {
+    const state = get();
+    const current: BackupSnapshot = {
+      collections: state.collections,
+      environments: state.environments,
+      activeEnvironmentId: state.activeEnvironmentId,
+      history: state.history,
+      chainVariables: state.chainVariables,
+      theme: state.theme,
+    };
+    const next = applyBackup(current, backup, mode);
+
+    saveToStorage(STORAGE_KEYS.collections, next.collections);
+    saveToStorage(STORAGE_KEYS.environments, next.environments);
+    saveToStorage(STORAGE_KEYS.activeEnv, next.activeEnvironmentId);
+    saveToStorage(STORAGE_KEYS.history, next.history);
+    saveToStorage(STORAGE_KEYS.chainVariables, next.chainVariables);
+    saveToStorage(STORAGE_KEYS.theme, next.theme);
+
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', next.theme);
+    }
+
+    set({
+      collections: next.collections,
+      environments: next.environments,
+      activeEnvironmentId: next.activeEnvironmentId,
+      history: next.history,
+      chainVariables: next.chainVariables,
+      theme: next.theme,
+    });
   },
 
   // UI actions

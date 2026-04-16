@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useAppStore } from '../index';
 import { createDefaultRequest } from '../../types';
+import { createBackup } from '../../utils/backup';
 
 // Reset store between tests
 function resetStore() {
@@ -367,6 +368,111 @@ describe('Save Active Request', () => {
     expect(tab.collectionId).toBe('col-123');
     expect(tab.sourceRequestId).toBe('req-456');
     expect(tab.isModified).toBe(false);
+  });
+});
+
+// ─── Backup / Restore ────────────────────────────────────────────────────────
+
+describe('Backup / Restore', () => {
+  it('getBackupSnapshot returns all persistent state', () => {
+    useAppStore.getState().createCollection('My Col');
+    useAppStore.getState().createEnvironment('Dev');
+    useAppStore.getState().addToHistory(createDefaultRequest({ url: 'https://h.com' }), null);
+    useAppStore.getState().updateChainVariables({ token: 'abc' });
+
+    const snapshot = useAppStore.getState().getBackupSnapshot();
+    expect(snapshot.collections).toHaveLength(1);
+    expect(snapshot.environments).toHaveLength(1);
+    expect(snapshot.history).toHaveLength(1);
+    expect(snapshot.chainVariables).toEqual({ token: 'abc' });
+    expect(snapshot.theme).toBe('dark');
+  });
+
+  it('importBackup in replace mode overwrites data and persists to localStorage', () => {
+    useAppStore.getState().createCollection('Old');
+    useAppStore.getState().createEnvironment('Old Env');
+
+    const backup = createBackup({
+      collections: [{ id: 'c1', name: 'Imported', requests: [], createdAt: 1, updatedAt: 1 }],
+      environments: [{ id: 'e1', name: 'Imported Env', variables: [], isActive: false }],
+      activeEnvironmentId: 'e1',
+      history: [],
+      chainVariables: { key: 'val' },
+      theme: 'light',
+    });
+
+    useAppStore.getState().importBackup(backup, 'replace');
+
+    const state = useAppStore.getState();
+    expect(state.collections).toHaveLength(1);
+    expect(state.collections[0].name).toBe('Imported');
+    expect(state.environments).toHaveLength(1);
+    expect(state.environments[0].name).toBe('Imported Env');
+    expect(state.activeEnvironmentId).toBe('e1');
+    expect(state.chainVariables).toEqual({ key: 'val' });
+    expect(state.theme).toBe('light');
+
+    // Persisted
+    expect(JSON.parse(localStorage.getItem('curlit_collections')!)).toHaveLength(1);
+    expect(JSON.parse(localStorage.getItem('curlit_environments')!)).toHaveLength(1);
+    expect(JSON.parse(localStorage.getItem('curlit_active_env')!)).toBe('e1');
+    expect(JSON.parse(localStorage.getItem('curlit_chain_vars')!)).toEqual({ key: 'val' });
+    expect(JSON.parse(localStorage.getItem('curlit_theme')!)).toBe('light');
+  });
+
+  it('importBackup in merge mode appends without overwriting existing data', () => {
+    useAppStore.getState().createCollection('Existing');
+    useAppStore.getState().createEnvironment('Existing Env');
+    const existingEnvId = useAppStore.getState().environments[0].id;
+    useAppStore.getState().setActiveEnvironment(existingEnvId);
+
+    const backup = createBackup({
+      collections: [{ id: 'c1', name: 'Imported', requests: [], createdAt: 1, updatedAt: 1 }],
+      environments: [{ id: 'e1', name: 'Imported Env', variables: [], isActive: false }],
+      activeEnvironmentId: 'e1',
+      history: [],
+      chainVariables: {},
+      theme: 'light',
+    });
+
+    useAppStore.getState().importBackup(backup, 'merge');
+
+    const state = useAppStore.getState();
+    expect(state.collections).toHaveLength(2);
+    expect(state.environments).toHaveLength(2);
+    expect(state.activeEnvironmentId).toBe(existingEnvId);
+    // Merge preserves current theme
+    expect(state.theme).toBe('dark');
+  });
+
+  it('importBackup strips scripts for safety', () => {
+    const backup = createBackup({
+      collections: [
+        {
+          id: 'c1',
+          name: 'Imported',
+          requests: [
+            {
+              ...createDefaultRequest({ name: 'Scripted' }),
+              preRequestScript: 'alert(1)',
+              testScript: 'console.log("test")',
+            },
+          ],
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      environments: [],
+      activeEnvironmentId: null,
+      history: [],
+      chainVariables: {},
+      theme: 'dark',
+    });
+
+    useAppStore.getState().importBackup(backup, 'replace');
+    const req = useAppStore.getState().collections[0].requests[0];
+    expect(req.preRequestScript).toBeUndefined();
+    expect(req.testScript).toBeUndefined();
   });
 });
 
