@@ -307,7 +307,7 @@ function App() {
       {/* Status bar */}
       <footer className="flex items-center justify-between px-3 py-1 bg-dark-800 border-t border-dark-600 text-[10px] text-dark-400 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <span>CurlIt v1.0.0</span>
+          <span>CurlIt v1.3.0</span>
           <span>|</span>
           <span>{tabs.length} tab{tabs.length !== 1 ? 's' : ''} open</span>
         </div>
