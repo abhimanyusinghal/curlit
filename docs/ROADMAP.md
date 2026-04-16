@@ -53,7 +53,7 @@
 
 ### v1.3 -- Collaboration & Sync
 
-- [ ] Export/import all data (full backup as single JSON)
+- [x] Export/import all data (full backup as single JSON)
 - [ ] Shareable request links (encoded in URL)
 - [ ] Optional cloud sync via GitHub Gist or a self-hosted backend
 - [ ] Team workspaces with shared collections
