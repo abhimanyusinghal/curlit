@@ -28,6 +28,7 @@ import { SaveRequestModal } from './components/SaveRequestModal';
 import { BackupModal } from './components/BackupModal';
 import { ShareRequestModal } from './components/ShareRequestModal';
 import { SyncModal } from './components/SyncModal';
+import { CollectionRunnerModal } from './components/CollectionRunnerModal';
 import { useResizable } from './hooks/useResizable';
 import { disconnectWebSocket } from './utils/websocket';
 import { readShareFromLocation, sharedRequestToTabSeed } from './utils/share';
@@ -52,6 +53,7 @@ function App() {
   const [showBackup, setShowBackup] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [showSync, setShowSync] = useState(false);
+  const [runnerCollectionId, setRunnerCollectionId] = useState<string | null>(null);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
   const activeRequest = activeTab ? requests[activeTab.requestId] : null;
@@ -249,7 +251,7 @@ function App() {
         {sidebarOpen && (
           <>
             <div style={{ width: sidebarWidth }} className="flex-shrink-0 h-full overflow-hidden">
-              <Sidebar />
+              <Sidebar onRunCollection={id => setRunnerCollectionId(id)} />
             </div>
             <div
               onMouseDown={handleSidebarResize}
@@ -323,6 +325,11 @@ function App() {
       <BackupModal open={showBackup} onClose={() => setShowBackup(false)} />
       <ShareRequestModal open={showShare} onClose={() => setShowShare(false)} request={activeRequest} />
       <SyncModal open={showSync} onClose={() => setShowSync(false)} />
+      <CollectionRunnerModal
+        open={runnerCollectionId !== null}
+        onClose={() => setRunnerCollectionId(null)}
+        collection={useAppStore.getState().collections.find(c => c.id === runnerCollectionId) ?? null}
+      />
     </div>
   );
 }

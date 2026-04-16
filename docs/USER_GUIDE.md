@@ -124,6 +124,22 @@ Click any request in a collection to open it in a new tab.
 
 The import auto-detects the format. To import from Postman, export your Postman collection as **Collection v2.1** JSON, then paste it directly into the import textarea.
 
+### Running a Collection
+
+Execute every request in a collection sequentially and see a pass/fail summary -- the shortest path from a hand-authored suite to an automated smoke test.
+
+1. Click **...** on the collection -> **Run collection**
+2. In the runner modal, optionally pick an environment (defaults to the active one), set a per-request delay in ms (0 by default), and toggle **Stop on first failure**
+3. Click **Start Run**. Each request row shows its status (pending -> running -> passed / failed / errored / skipped) and can be expanded after completion to see the response and any test results.
+
+**What counts as a failure:**
+
+- **passed** -- request completed and either had no tests or all tests passed
+- **failed** -- one or more assertions in `testScript` failed (note: a 4xx/5xx status on its own is *not* a failure -- your tests are authoritative)
+- **errored** -- the network call or pre-request script threw before a response could be collected
+
+Chain variables set by `testScript` during the run are visible to later requests in the same run, so setup/teardown chains (login -> call -> cleanup) work naturally. Click **Stop** to abort in-flight -- any remaining requests are marked **skipped**.
+
 ---
 
 ## Environment Variables

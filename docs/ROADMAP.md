@@ -61,7 +61,7 @@
 
 ### v1.4 -- Performance & Testing
 
-- [ ] Collection runner -- execute all requests in a collection sequentially
+- [x] Collection runner -- execute all requests in a collection sequentially
 - [ ] Performance benchmarking -- run a request N times, report avg/p95/p99
 - [ ] Response diffing -- compare two responses side-by-side
 - [ ] Mock server -- define mock responses for endpoints

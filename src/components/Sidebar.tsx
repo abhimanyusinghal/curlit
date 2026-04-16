@@ -30,7 +30,11 @@ function stripScriptsFromCollection(collection: Collection): Collection {
   return { ...collection, requests: collection.requests.map(stripScripts) };
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  onRunCollection?: (collectionId: string) => void;
+}
+
+export function Sidebar({ onRunCollection }: SidebarProps = {}) {
   const sidebarView = useAppStore(s => s.sidebarView);
   const setSidebarView = useAppStore(s => s.setSidebarView);
 
@@ -63,7 +67,7 @@ export function Sidebar() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        {sidebarView === 'collections' && <CollectionsPanel />}
+        {sidebarView === 'collections' && <CollectionsPanel onRunCollection={onRunCollection} />}
         {sidebarView === 'history' && <HistoryPanel />}
         {sidebarView === 'environments' && <EnvironmentsPanel />}
       </div>
@@ -71,7 +75,7 @@ export function Sidebar() {
   );
 }
 
-function CollectionsPanel() {
+function CollectionsPanel({ onRunCollection }: { onRunCollection?: (id: string) => void }) {
   const collections = useAppStore(s => s.collections);
   const createCollection = useAppStore(s => s.createCollection);
   const [showImport, setShowImport] = useState(false);
@@ -190,13 +194,13 @@ function CollectionsPanel() {
           No collections yet. Click + to create one.
         </div>
       ) : (
-        collections.map(c => <CollectionItem key={c.id} collection={c} />)
+        collections.map(c => <CollectionItem key={c.id} collection={c} onRun={onRunCollection} />)
       )}
     </div>
   );
 }
 
-function CollectionItem({ collection }: { collection: Collection }) {
+function CollectionItem({ collection, onRun }: { collection: Collection; onRun?: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const deleteCollection = useAppStore(s => s.deleteCollection);
@@ -269,6 +273,16 @@ function CollectionItem({ collection }: { collection: Collection }) {
                 className="w-full text-left px-3 py-1.5 text-xs text-dark-200 hover:bg-dark-600 cursor-pointer"
               >
                 Export
+              </button>
+              <button
+                onClick={() => {
+                  onRun?.(collection.id);
+                  setShowMenu(false);
+                }}
+                disabled={collection.requests.length === 0}
+                className="w-full text-left px-3 py-1.5 text-xs text-dark-200 hover:bg-dark-600 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Run collection
               </button>
               <button
                 onClick={() => {
