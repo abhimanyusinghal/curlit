@@ -16,7 +16,7 @@
     "test:server": "vitest run server/__tests__/",
     "test:e2e": "npx playwright test",
     "bundle:agent": "node scripts/build-agent.mjs",
-    "package:agent": "npm run bundle:agent && pkg dist-agent/agent.cjs --targets node22-win-x64,node22-macos-x64,node22-linux-x64 --out-path dist-agent"
+    "package:agent": "npm run bundle:agent && pkg dist-agent/agent.cjs --public --public-packages \"*\" --targets node22-win-x64,node22-macos-x64,node22-linux-x64 --out-path dist-agent"
   },
   "dependencies": {
     "@codemirror/lang-html": "^6.4.11",
