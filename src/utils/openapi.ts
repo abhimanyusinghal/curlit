@@ -710,7 +710,7 @@ interface BodyResult {
 
 function extractBody(
   spec: OpenApiSpec,
-  method: HttpMethod,
+  _method: HttpMethod,
   operation: Operation,
   params: Parameter[],
 ): BodyResult {

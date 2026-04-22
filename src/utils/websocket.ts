@@ -1,12 +1,12 @@
 import { useAppStore } from '../store';
 import { buildHeaders, buildUrl, resolveRequestVariables } from './http';
+import { proxyWsUrl } from './proxyConfig';
 import type { RequestConfig, WebSocketMessage } from '../types';
 
 const activeConnections = new Map<string, WebSocket>();
 
 function buildProxyUrl(): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/api/ws-proxy`;
+  return proxyWsUrl('/api/ws-proxy');
 }
 
 export function isWebSocketUrl(url: string): boolean {

@@ -1,0 +1,44 @@
+name: Release agent binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci --no-audit --no-fund
+
+      - run: npm run package:agent
+
+      - name: Rename outputs
+        run: |
+          cd dist-agent
+          test -f agent-win.exe && mv agent-win.exe curlit-agent-win-x64.exe || true
+          test -f agent-macos && mv agent-macos curlit-agent-macos-x64 || true
+          test -f agent-linux && mv agent-linux curlit-agent-linux-x64 || true
+          ls -la
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            dist-agent/curlit-agent-win-x64.exe
+            dist-agent/curlit-agent-macos-x64
+            dist-agent/curlit-agent-linux-x64
+          generate_release_notes: true
+          fail_on_unmatched_files: true

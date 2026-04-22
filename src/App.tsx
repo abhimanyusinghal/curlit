@@ -14,7 +14,10 @@ import {
   Archive,
   Share2,
   Cloud,
+  Cpu,
 } from 'lucide-react';
+import { getProxyMode, onProxyModeChange, localProxyHealthUrl, type ProxyMode } from './utils/proxyConfig';
+import { AgentSettingsModal } from './components/AgentSettingsModal';
 import { useAppStore } from './store';
 import { RequestTabs } from './components/RequestTabs';
 import { UrlBar } from './components/UrlBar';
@@ -53,6 +56,9 @@ function App() {
   const [showBackup, setShowBackup] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [showSync, setShowSync] = useState(false);
+  const [showAgent, setShowAgent] = useState(false);
+  const [proxyMode, setProxyModeState] = useState<ProxyMode>(() => getProxyMode());
+  const [agentConnected, setAgentConnected] = useState(false);
   const [runnerCollectionId, setRunnerCollectionId] = useState<string | null>(null);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
@@ -118,6 +124,30 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  useEffect(() => onProxyModeChange(setProxyModeState), []);
+
+  useEffect(() => {
+    if (proxyMode !== 'local') {
+      setAgentConnected(false);
+      return;
+    }
+    let cancelled = false;
+    const ping = async () => {
+      try {
+        const res = await fetch(localProxyHealthUrl(), { signal: AbortSignal.timeout(3000) });
+        if (!cancelled) setAgentConnected(res.ok);
+      } catch {
+        if (!cancelled) setAgentConnected(false);
+      }
+    };
+    ping();
+    const id = window.setInterval(ping, 10000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [proxyMode]);
 
   // Close all WebSocket connections on page unload
   useEffect(() => {
@@ -193,6 +223,27 @@ function App() {
             </div>
           )}
 
+          <button
+            onClick={() => setShowAgent(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded-md transition-colors cursor-pointer"
+            title={
+              proxyMode === 'local'
+                ? agentConnected
+                  ? 'Local agent: connected'
+                  : 'Local agent: not running'
+                : 'Local agent (for localhost / intranet requests)'
+            }
+          >
+            <Cpu size={13} />
+            Agent
+            {proxyMode === 'local' && (
+              <span
+                className={`inline-block w-1.5 h-1.5 rounded-full ${
+                  agentConnected ? 'bg-accent-green' : 'bg-accent-red'
+                }`}
+              />
+            )}
+          </button>
           <button
             onClick={() => setShowSync(true)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-dark-300 hover:text-dark-100 bg-dark-700 hover:bg-dark-600 rounded-md transition-colors cursor-pointer"
@@ -325,6 +376,7 @@ function App() {
       <BackupModal open={showBackup} onClose={() => setShowBackup(false)} />
       <ShareRequestModal open={showShare} onClose={() => setShowShare(false)} request={activeRequest} />
       <SyncModal open={showSync} onClose={() => setShowSync(false)} />
+      <AgentSettingsModal open={showAgent} onClose={() => setShowAgent(false)} />
       <CollectionRunnerModal
         open={runnerCollectionId !== null}
         onClose={() => setRunnerCollectionId(null)}

@@ -1,4 +1,5 @@
 import type { OAuth2Config, OAuth2Token } from '../types';
+import { proxyUrl } from './proxyConfig';
 
 /**
  * Exchange an authorization code or client credentials for an access token
@@ -26,7 +27,7 @@ export async function fetchOAuth2Token(
     }
   }
 
-  const response = await fetch('/api/oauth/token', {
+  const response = await fetch(proxyUrl('/api/oauth/token'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

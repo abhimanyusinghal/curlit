@@ -1,5 +1,6 @@
 import type { RequestConfig, ResponseData, KeyValuePair, AuthConfig, FormDataEntry } from '../types';
 import { getFile, fileToBase64 } from './fileStore';
+import { proxyUrl } from './proxyConfig';
 
 export function buildUrl(baseUrl: string, params: KeyValuePair[]): string {
   const enabledParams = params.filter(p => p.enabled && p.key);
@@ -257,7 +258,7 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
   }
 
   // Use proxy server to avoid CORS
-  const proxyUrl = '/api/proxy';
+  const proxyEndpoint = proxyUrl('/api/proxy');
   const startTime = performance.now();
 
   let proxyBody: string;
@@ -301,7 +302,7 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
     });
   }
 
-  const response = await fetch(proxyUrl, {
+  const response = await fetch(proxyEndpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: proxyBody,

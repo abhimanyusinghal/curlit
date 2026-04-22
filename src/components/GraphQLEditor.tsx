@@ -12,6 +12,7 @@ import {
 import { useAppStore } from '../store';
 import type { Theme } from '../store';
 import { buildUrl, buildHeaders, resolveVariables } from '../utils/http';
+import { proxyUrl } from '../utils/proxyConfig';
 
 /** Build a cache key from the fully resolved endpoint URL + auth headers.
  *  Returns null when the URL is empty or unresolvable. */
@@ -177,14 +178,14 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
       );
       headers['Content-Type'] = 'application/json';
 
-      const proxyUrl = endpointUrl.startsWith('http') ? endpointUrl : `https://${endpointUrl}`;
+      const targetUrl = endpointUrl.startsWith('http') ? endpointUrl : `https://${endpointUrl}`;
 
-      const response = await fetch('/api/proxy', {
+      const response = await fetch(proxyUrl('/api/proxy'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           method: 'POST',
-          url: proxyUrl,
+          url: targetUrl,
           headers,
           body: JSON.stringify({ query: getIntrospectionQuery() }),
           bodyType: 'json',

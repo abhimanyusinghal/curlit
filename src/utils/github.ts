@@ -8,6 +8,8 @@
  * CORS with a user-held access token.
  */
 
+import { proxyUrl } from './proxyConfig';
+
 // ─── Device flow ─────────────────────────────────────────────────────────────
 
 export interface DeviceCode {
@@ -27,13 +29,13 @@ export type DevicePollResult =
   | { status: 'error'; message: string };
 
 export async function fetchSyncStatus(): Promise<{ configured: boolean }> {
-  const res = await fetch('/api/github/status');
+  const res = await fetch(proxyUrl('/api/github/status'));
   if (!res.ok) return { configured: false };
   return res.json();
 }
 
 export async function requestDeviceCode(): Promise<DeviceCode> {
-  const res = await fetch('/api/github/device-code', { method: 'POST' });
+  const res = await fetch(proxyUrl('/api/github/device-code'), { method: 'POST' });
   const data = await res.json();
   if (!res.ok || !data.device_code) {
     throw new Error(data.error || 'Could not start GitHub sign-in');
@@ -48,7 +50,7 @@ export async function requestDeviceCode(): Promise<DeviceCode> {
 }
 
 export async function pollDeviceToken(deviceCode: string): Promise<DevicePollResult> {
-  const res = await fetch('/api/github/device-token', {
+  const res = await fetch(proxyUrl('/api/github/device-token'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deviceCode }),
