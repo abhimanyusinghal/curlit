@@ -59,8 +59,12 @@ curlit/
 │   ├── ARCHITECTURE.md
 │   └── USER_GUIDE.md
 ├── e2e/                   # Playwright end-to-end tests
+├── electron/              # Electron desktop shell
+│   ├── main.cjs           # Main process (window + IPC wiring)
+│   ├── preload.cjs        # contextBridge exposing window.curlit
+│   └── ipc.cjs            # Port of proxy.js logic as IPC handlers
 ├── server/
-│   ├── proxy.js           # Express proxy to bypass CORS
+│   ├── proxy.js           # Express proxy to bypass CORS (browser build only)
 │   └── __tests__/         # Proxy server tests
 ├── src/
 │   ├── components/        # React components
@@ -97,6 +101,25 @@ curlit/
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run test:coverage` | Run tests with V8 coverage report |
 | `npm run test:e2e` | Run Playwright end-to-end tests |
+| `npm run electron:dev` | Start Vite + the Electron desktop app in dev mode |
+| `npm run electron:build` | Build the desktop app for the current platform |
+| `npm run electron:build:win` / `:mac` / `:linux` | Build the desktop app for a specific target |
+
+## Desktop App
+
+CurlIt ships as an Electron desktop app that bypasses the browser's CORS model entirely. Requests, WebSockets, and OAuth token exchanges run in the Electron main process over IPC — no proxy server to manage.
+
+```bash
+# Dev mode (hot reload + DevTools)
+npm run electron:dev
+
+# Production build for your current platform
+npm run electron:build
+```
+
+Installers are emitted to `dist-desktop/`. GitHub sync inside the desktop app still reads `GITHUB_CLIENT_ID` from the environment, the same way the proxy does.
+
+See [docs/DESKTOP.md](docs/DESKTOP.md) for full build instructions, IPC architecture, and troubleshooting.
 
 ## Testing
 
@@ -123,7 +146,9 @@ npm run test:e2e
 
 ## How It Works
 
-CurlIt runs a lightweight Express proxy server alongside the Vite dev server. When you send a request, the frontend POSTs the request configuration to `/api/proxy`, which forwards it to the target API using Node.js `fetch`. This avoids browser CORS restrictions and returns the full response (status, headers, body, cookies) back to the UI.
+In the browser build, CurlIt runs a lightweight Express proxy server alongside the Vite dev server. When you send a request, the frontend POSTs the request configuration to `/api/proxy`, which forwards it to the target API using Node.js `fetch`. This avoids browser CORS restrictions and returns the full response (status, headers, body, cookies) back to the UI.
+
+In the desktop build, the same request payload is sent over Electron IPC to the main process instead -- the Node runtime in Electron has no CORS, so there's no proxy server to run. Everything else (WebSocket relay, OAuth token exchange, GitHub device flow) works identically via IPC.
 
 All data (collections, environments, history, panel sizes) is persisted in `localStorage` -- no database or account required.
 

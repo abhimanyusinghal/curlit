@@ -13,6 +13,7 @@ import { useAppStore } from '../store';
 import type { Theme } from '../store';
 import { buildUrl, buildHeaders, resolveVariables } from '../utils/http';
 import { proxyUrl } from '../utils/proxyConfig';
+import { isDesktop, desktopApi } from '../utils/desktop';
 
 /** Build a cache key from the fully resolved endpoint URL + auth headers.
  *  Returns null when the URL is empty or unresolvable. */
@@ -180,22 +181,29 @@ export function GraphQLEditor({ requestId, query, variables, onQueryChange, onVa
 
       const targetUrl = endpointUrl.startsWith('http') ? endpointUrl : `https://${endpointUrl}`;
 
-      const response = await fetch(proxyUrl('/api/proxy'), {
+      const payload = {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          method: 'POST',
-          url: targetUrl,
-          headers,
-          body: JSON.stringify({ query: getIntrospectionQuery() }),
-          bodyType: 'json',
-        }),
-      });
+        url: targetUrl,
+        headers,
+        body: JSON.stringify({ query: getIntrospectionQuery() }),
+        bodyType: 'json',
+      };
 
-      const data = await response.json();
+      let data: { status: number; body: string | object };
+      if (isDesktop()) {
+        data = await desktopApi().http(payload);
+      } else {
+        const response = await fetch(proxyUrl('/api/proxy'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        data = await response.json();
+      }
 
       if (data.status >= 400) {
-        throw new Error(`Server returned ${data.status}: ${data.body?.substring(0, 200)}`);
+        const bodyPreview = typeof data.body === 'string' ? data.body.substring(0, 200) : JSON.stringify(data.body).substring(0, 200);
+        throw new Error(`Server returned ${data.status}: ${bodyPreview}`);
       }
 
       const body = typeof data.body === 'string' ? JSON.parse(data.body) : data.body;
