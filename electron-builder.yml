@@ -1,0 +1,38 @@
+appId: com.curlit.app
+productName: CurlIt
+copyright: Copyright © 2026 CurlIt
+directories:
+  output: dist-desktop
+  buildResources: public
+files:
+  - electron/**/*
+  - dist/**/*
+  - package.json
+  - '!node_modules/**/*'
+extraMetadata:
+  # electron-builder reads `main` from package.json; we point it at the CJS entry.
+  main: electron/main.cjs
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: logo.png
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: logo.png
+  category: public.app-category.developer-tools
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: logo.png
+  category: Development
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true

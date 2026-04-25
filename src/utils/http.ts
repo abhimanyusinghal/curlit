@@ -1,6 +1,7 @@
 import type { RequestConfig, ResponseData, KeyValuePair, AuthConfig, FormDataEntry } from '../types';
 import { getFile, fileToBase64 } from './fileStore';
 import { proxyUrl } from './proxyConfig';
+import { isDesktop, desktopApi, type HttpProxyPayload } from './desktop';
 
 export function buildUrl(baseUrl: string, params: KeyValuePair[]): string {
   const enabledParams = params.filter(p => p.enabled && p.key);
@@ -257,22 +258,22 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
     finalUrl = urlObj.toString();
   }
 
-  // Use proxy server to avoid CORS
-  const proxyEndpoint = proxyUrl('/api/proxy');
   const startTime = performance.now();
 
-  let proxyBody: string;
+  // Build the structured proxy payload once — the browser path JSON-encodes it
+  // for the Express proxy, the desktop path hands it to the Electron main
+  // process over IPC. Both paths accept the same shape (see electron/ipc.cjs).
+  let payload: HttpProxyPayload;
   if (body instanceof FormData && request.body.type === 'form-data') {
-    // Serialize form-data entries (including files as base64) for the proxy
     const formDataEntries = await serializeFormDataEntries(request.id, request.body.formData);
-    proxyBody = JSON.stringify({
+    payload = {
       method: request.method,
       url: finalUrl,
       headers,
       bodyType: 'form-data',
       formDataEntries,
       sslVerification: request.sslVerification !== false,
-    });
+    };
   } else if (request.body.type === 'binary') {
     const file = getFile(request.id, BINARY_ENTRY_ID);
     if (!file) {
@@ -283,33 +284,38 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
       );
     }
     const base64 = await fileToBase64(file);
-    proxyBody = JSON.stringify({
+    payload = {
       method: request.method,
       url: finalUrl,
       headers,
       bodyType: 'binary',
       binary: { base64, fileName: file.name, fileType: file.type || 'application/octet-stream' },
       sslVerification: request.sslVerification !== false,
-    });
+    };
   } else {
-    proxyBody = JSON.stringify({
+    payload = {
       method: request.method,
       url: finalUrl,
       headers,
       body: body instanceof FormData ? Object.fromEntries(body) : body,
       bodyType: request.body.type,
       sslVerification: request.sslVerification !== false,
-    });
+    };
   }
 
-  const response = await fetch(proxyEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: proxyBody,
-  });
+  let data: { status: number; statusText: string; headers?: Record<string, string>; body: string; cookies?: { name: string; value: string }[] };
+  if (isDesktop()) {
+    data = await desktopApi().http(payload);
+  } else {
+    const response = await fetch(proxyUrl('/api/proxy'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    data = await response.json();
+  }
 
   const elapsed = performance.now() - startTime;
-  const data = await response.json();
 
   return {
     status: data.status,

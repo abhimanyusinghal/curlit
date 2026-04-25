@@ -1,16 +1,21 @@
 import type { OAuth2Config, OAuth2Token } from '../types';
 import { proxyUrl } from './proxyConfig';
+import { isDesktop, desktopApi, type OAuthTokenPayload } from './desktop';
 
 /**
- * Exchange an authorization code or client credentials for an access token
- * via the proxy server (avoids CORS issues with token endpoints).
+ * Exchange an authorization code or client credentials for an access token.
+ *
+ * Browser build: routes through the Express proxy (/api/oauth/token) to avoid
+ * CORS restrictions at the token endpoint.
+ * Desktop build: calls the Electron main process directly via IPC — no proxy
+ * server involved.
  */
 export async function fetchOAuth2Token(
   config: OAuth2Config,
   authorizationCode?: string,
   sslVerification?: boolean,
 ): Promise<OAuth2Token> {
-  const payload: Record<string, string | boolean | undefined> = {
+  const payload: OAuthTokenPayload = {
     tokenUrl: config.tokenUrl,
     grantType: config.grantType,
     clientId: config.clientId,
@@ -27,21 +32,29 @@ export async function fetchOAuth2Token(
     }
   }
 
-  const response = await fetch(proxyUrl('/api/oauth/token'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await response.json();
+  let data: Record<string, unknown>;
+  let status: number;
+  if (isDesktop()) {
+    const result = await desktopApi().oauthToken(payload);
+    status = (result.__status as number) ?? 200;
+    data = result;
+  } else {
+    const response = await fetch(proxyUrl('/api/oauth/token'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    data = await response.json();
+    status = response.status;
+  }
 
   if (data.error) {
-    const detail = data.error_description || data.error;
+    const detail = (data.error_description as string) || (data.error as string);
     throw new Error(`OAuth error: ${detail}`);
   }
 
-  if (!response.ok) {
-    throw new Error(`Token request failed with status ${response.status}`);
+  if (status < 200 || status >= 300) {
+    throw new Error(`Token request failed with status ${status}`);
   }
 
   if (!data.access_token) {
@@ -49,11 +62,11 @@ export async function fetchOAuth2Token(
   }
 
   return {
-    accessToken: data.access_token,
-    tokenType: data.token_type || 'Bearer',
-    expiresIn: data.expires_in,
-    refreshToken: data.refresh_token,
-    scope: data.scope,
+    accessToken: data.access_token as string,
+    tokenType: (data.token_type as string) || 'Bearer',
+    expiresIn: data.expires_in as number | undefined,
+    refreshToken: data.refresh_token as string | undefined,
+    scope: data.scope as string | undefined,
     obtainedAt: Date.now(),
   };
 }
