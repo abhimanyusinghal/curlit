@@ -142,7 +142,7 @@ jobs:
         shell: bash
         run: |
           cd release-assets
-          find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs -r sha256sum > SHA256SUMS.txt
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%f\n' | sort | xargs -r sha256sum > SHA256SUMS.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
