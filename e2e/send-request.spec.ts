@@ -2,6 +2,21 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Send Request', () => {
   test.beforeEach(async ({ page }) => {
+    await page.route('**/api/proxy', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 200,
+          statusText: 'OK',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ verified: true }),
+          cookies: [],
+          time: 5,
+          size: 17,
+        }),
+      });
+    });
     await page.goto('/');
     await page.waitForLoadState('networkidle');
   });
@@ -15,7 +30,7 @@ test.describe('Send Request', () => {
     await page.click('button:has-text("Send")');
 
     // Wait for response - should show status code
-    await expect(page.locator('text=/200/')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('200 OK')).toBeVisible();
   });
 
   test('change HTTP method persists in dropdown', async ({ page }) => {

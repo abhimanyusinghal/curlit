@@ -8,7 +8,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.{js,ts}'],
+    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.{js,ts}', 'electron/**/*.test.{js,cjs,ts}'],
     css: false,
     coverage: {
       provider: 'v8',

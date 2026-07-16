@@ -199,14 +199,14 @@ function MessageRow({ message }: { message: WebSocketMessage }) {
 }
 
 function ConnectionTimer({ connectedAt }: { connectedAt: number }) {
-  const [, setTick] = useState(0);
+  const [now, setNow] = useState(connectedAt);
 
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const elapsed = Math.floor((Date.now() - connectedAt) / 1000);
+  const elapsed = Math.floor((now - connectedAt) / 1000);
   const mins = Math.floor(elapsed / 60);
   const secs = elapsed % 60;
   const display = mins > 0

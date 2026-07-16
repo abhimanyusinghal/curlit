@@ -13,11 +13,10 @@ test.describe('Environments', () => {
     // Navigate to Environments tab
     await page.locator('button[title="Environments"]').click();
 
-    // Create new environment
-    page.on('dialog', async dialog => {
-      await dialog.accept('Production');
-    });
     await page.locator('button[title="New environment"]').click();
+    const dialog = page.getByRole('dialog', { name: 'New Environment' });
+    await dialog.getByRole('textbox', { name: 'Environment name' }).fill('Production');
+    await dialog.getByRole('button', { name: 'Create' }).click();
 
     // Verify environment appears
     await expect(page.getByText('Production')).toBeVisible();

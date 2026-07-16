@@ -12,6 +12,9 @@ dist
 dist-agent
 dist-desktop
 dist-ssr
+coverage
+playwright-report
+test-results
 *.local
 
 # Editor directories and files

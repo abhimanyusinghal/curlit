@@ -47,6 +47,8 @@ export function CollectionRunnerModal({ open, onClose, collection }: Props) {
   // Reset when opened for a different collection
   useEffect(() => {
     if (!open) return;
+    // This effect intentionally resets transient form/run state at the modal boundary.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEnvId(activeEnvironmentId);
     setPhase('idle');
     setRows(collection ? collection.requests.map(() => ({ status: 'pending' })) : []);

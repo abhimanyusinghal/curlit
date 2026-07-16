@@ -218,7 +218,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const request = state.requests[activeTab.requestId];
     if (!request) return;
 
-    const { id: _, ...requestData } = request;
+    const requestData = { ...request };
+    delete (requestData as Partial<RequestConfig>).id;
     const newReq = createDefaultRequest({
       ...requestData,
       name: `${request.name} (copy)`,

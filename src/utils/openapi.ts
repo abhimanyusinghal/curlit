@@ -1,4 +1,4 @@
-import yaml from 'js-yaml';
+import { load as loadYaml } from 'js-yaml';
 import type { RequestConfig, KeyValuePair, AuthConfig, BodyType, HttpMethod, FormDataEntry } from '../types';
 import { createDefaultRequest, createKeyValuePair, createFormDataEntry } from '../types';
 
@@ -302,7 +302,7 @@ export function parseOpenApiInput(text: string): OpenApiSpec {
   if (trimmed.startsWith('{')) {
     return JSON.parse(trimmed);
   }
-  return yaml.load(trimmed) as OpenApiSpec;
+  return loadYaml(trimmed) as OpenApiSpec;
 }
 
 export function isOpenApiSpec(data: unknown): data is OpenApiSpec {

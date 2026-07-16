@@ -1,4 +1,4 @@
-name: Release agent binaries
+name: Release CurlIt
 
 on:
   push:
@@ -7,10 +7,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
+  verify:
+    name: Verify source
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,24 +22,174 @@ jobs:
           cache: 'npm'
 
       - run: npm ci --no-audit --no-fund
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          expected_tag="v$(node -p 'require("./package.json").version')"
+          if [ "$GITHUB_REF_NAME" != "$expected_tag" ]; then
+            echo "::error title=Release tag does not match package version::Expected $expected_tag, got $GITHUB_REF_NAME"
+            exit 1
+          fi
+      - run: npm run lint:electron
+      - run: npm test
 
+  build-agent:
+    name: Build agent binaries
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci --no-audit --no-fund
       - run: npm run package:agent
 
       - name: Rename outputs
+        shell: bash
         run: |
           cd dist-agent
-          test -f agent-win.exe && mv agent-win.exe curlit-agent-win-x64.exe || true
-          test -f agent-macos && mv agent-macos curlit-agent-macos-x64 || true
-          test -f agent-linux && mv agent-linux curlit-agent-linux-x64 || true
-          ls -la
+          test -f agent-win.exe
+          mv agent-win.exe curlit-agent-win-x64.exe
+          test -f agent-macos
+          mv agent-macos curlit-agent-macos-x64
+          test -f agent-linux
+          mv agent-linux curlit-agent-linux-x64
 
-      - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+      - uses: actions/upload-artifact@v4
         with:
-          files: |
-            dist-agent/curlit-agent-win-x64.exe
-            dist-agent/curlit-agent-macos-x64
-            dist-agent/curlit-agent-linux-x64
+          name: curlit-agent-release
+          path: dist-agent/curlit-agent-*
+          if-no-files-found: error
+          retention-days: 7
+
+  build-desktop:
+    name: Build desktop (${{ matrix.name }})
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            platform: win
+            script: electron:build:win
+            artifacts: dist-desktop/*.exe
+          - name: macOS (x64 and arm64)
+            os: macos-15-intel
+            platform: mac
+            script: electron:build:mac
+            artifacts: dist-desktop/*.dmg
+          - name: Linux x64
+            os: ubuntu-latest
+            platform: linux
+            script: electron:build:linux
+            artifacts: |
+              dist-desktop/*.AppImage
+              dist-desktop/*.deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Verify Windows signing credentials
+        if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'win'
+        shell: bash
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          test -n "$WIN_CSC_LINK"
+          test -n "$WIN_CSC_KEY_PASSWORD"
+
+      - name: Verify macOS signing and notarization credentials
+        if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'mac'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -n "$CSC_LINK"
+          test -n "$CSC_KEY_PASSWORD"
+          test -n "$APPLE_ID"
+          test -n "$APPLE_APP_SPECIFIC_PASSWORD"
+          test -n "$APPLE_TEAM_ID"
+
+      - name: Build signed Windows installer
+        if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'win'
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: npm run ${{ matrix.script }} -- --config.forceCodeSigning=true
+
+      - name: Build signed and notarized macOS disk images
+        if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'mac'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run ${{ matrix.script }} -- --config.forceCodeSigning=true
+
+      - name: Build Linux packages
+        if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'linux'
+        run: npm run ${{ matrix.script }}
+
+      - name: Build unsigned desktop artifacts for manual runs
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: npm run ${{ matrix.script }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: curlit-desktop-${{ matrix.platform }}
+          path: ${{ matrix.artifacts }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub release
+    needs:
+      - build-agent
+      - build-desktop
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: curlit-agent-release
+          path: release-assets
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: curlit-desktop-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          cd release-assets
+          find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs -r sha256sum > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
           generate_release_notes: true
           fail_on_unmatched_files: true
