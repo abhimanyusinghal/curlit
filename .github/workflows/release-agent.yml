@@ -102,55 +102,12 @@ jobs:
 
       - run: npm ci --no-audit --no-fund
 
-      - name: Verify Windows signing credentials
-        if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'win'
-        shell: bash
+      - name: Build unsigned desktop artifacts
         env:
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: |
-          test -n "$WIN_CSC_LINK"
-          test -n "$WIN_CSC_KEY_PASSWORD"
-
-      - name: Verify macOS signing and notarization credentials
-        if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'mac'
-        shell: bash
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          test -n "$CSC_LINK"
-          test -n "$CSC_KEY_PASSWORD"
-          test -n "$APPLE_ID"
-          test -n "$APPLE_APP_SPECIFIC_PASSWORD"
-          test -n "$APPLE_TEAM_ID"
-
-      - name: Build signed Windows installer
-        if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'win'
-        env:
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: npm run ${{ matrix.script }} -- --config.forceCodeSigning=true
-
-      - name: Build signed and notarized macOS disk images
-        if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'mac'
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run ${{ matrix.script }} -- --config.forceCodeSigning=true
-
-      - name: Build Linux packages
-        if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'linux'
-        run: npm run ${{ matrix.script }}
-
-      - name: Build unsigned desktop artifacts for manual runs
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          # Open-source releases intentionally do not require commercial
+          # certificates. This also prevents a runner identity from changing
+          # release provenance implicitly.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run ${{ matrix.script }}
 
       - uses: actions/upload-artifact@v4
@@ -193,3 +150,7 @@ jobs:
           files: release-assets/*
           generate_release_notes: true
           fail_on_unmatched_files: true
+          body: |
+            ## Package trust
+
+            CurlIt desktop and agent packages are built from this tag by GitHub Actions and are intentionally **not code-signed or notarized**. Windows SmartScreen and macOS Gatekeeper may therefore show a warning. Verify the file against `SHA256SUMS.txt` before installation and follow the per-app instructions in `docs/DESKTOP.md`; do not disable operating-system security globally.

@@ -47,9 +47,8 @@ Artifacts are written to `dist-desktop/` with names like
 (for example, `win-unpacked/`).
 
 Build distribution artifacts on their native OS. electron-builder can perform
-some cross-platform packaging, but native Windows/macOS runners are required
-for signing and notarization and avoid platform-toolchain surprises. In
-particular, the macOS target produces two architecture-specific DMGs; it is not
+some cross-platform packaging, but native runners avoid platform-toolchain
+surprises. The macOS target produces two architecture-specific DMGs; it is not
 a universal DMG.
 
 The build uses `build/icons/icon.png`; electron-builder converts it to each
@@ -66,26 +65,29 @@ GitHub release. The tag must exactly match `v` plus the version in
 `package.json` (for example, package version `1.4.0` requires tag `v1.4.0`),
 or the workflow stops before building release assets.
 
-Tagged Windows and macOS releases deliberately fail rather than publish
-unsigned installers. Configure these repository secrets before creating a
-release tag:
+Release packages are intentionally unsigned so open-source publication does
+not depend on commercial certificate services. GitHub Actions builds every
+artifact from the tagged commit and publishes `SHA256SUMS.txt`; verify the
+downloaded filename and checksum before running it.
 
-| Target | Required GitHub Actions secrets |
-|---|---|
-| Windows | `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` |
-| macOS signing | `CSC_LINK`, `CSC_KEY_PASSWORD` |
-| macOS notarization | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` |
+Unsigned packages have these platform effects:
 
-`*_CSC_LINK` values are supplied to electron-builder as certificate locations
-or base64 certificate data, as supported by electron-builder. The macOS job
-uses hardened runtime and the checked-in Electron entitlements before it
-submits the signed app for notarization. Linux artifacts are not platform-code
-signed; verify their published SHA-256 checksums.
+- **Windows:** SmartScreen may show *Windows protected your PC*. After checking
+  the SHA-256 value, choose **More info** and **Run anyway** for this installer.
+- **macOS:** Gatekeeper may block the app. After checking the SHA-256 value,
+  Control-click CurlIt in Finder, choose **Open**, then confirm **Open**. Use the
+  per-app Privacy & Security override if macOS offers it. Do not disable
+  Gatekeeper globally and do not remove quarantine recursively from downloads.
+- **Linux:** validate `SHA256SUMS.txt`; make the AppImage executable before
+  launching it, or install the `.deb` with the system package manager.
 
-A manual workflow dispatch builds unsigned artifacts for testing and does not
-create a GitHub release. Pull requests also run the desktop CI on Windows,
-macOS, and Linux, build the real unsigned distribution artifacts, and retain
-them as workflow artifacts for seven days.
+Signing can be added later without changing application code. Until then, the
+tag, public workflow logs, generated checksums, and reproducible source build
+form the release provenance.
+
+A manual workflow dispatch builds artifacts for testing and does not create a
+GitHub release. Pull requests also run desktop CI on Windows, macOS, and Linux,
+build the real unsigned distribution artifacts, and retain them for seven days.
 
 ## Architecture
 
@@ -150,6 +152,6 @@ waits for port 5173; if Electron was started manually, start Vite first.
 automatically; if you invoke Electron yourself, unset it first. Packaged
 release builds ignore that variable by design.
 
-**A local macOS build is unsigned or not notarized.** This is expected without
-the release credentials. Use the tagged GitHub Actions workflow for
-distributable macOS artifacts.
+**macOS says the app cannot be verified.** Releases are intentionally unsigned.
+Verify the checksum, then use Finder's per-app **Open** override described
+above. Do not disable Gatekeeper globally.

@@ -127,7 +127,7 @@ npm run electron:build
 npm run electron:package
 ```
 
-Installers are emitted to `dist-desktop/`. Build distribution artifacts on their native OS: Windows produces an NSIS installer, macOS produces separate x64 and arm64 DMGs, and Linux produces AppImage and `.deb` packages. GitHub sync inside the desktop app still reads `GITHUB_CLIENT_ID` from the environment, the same way the proxy does.
+Installers are emitted to `dist-desktop/`. Build distribution artifacts on their native OS: Windows produces an NSIS installer, macOS produces separate x64 and arm64 DMGs, and Linux produces AppImage and `.deb` packages. GitHub releases are intentionally unsigned and include SHA-256 checksums; operating systems may require a per-app security override. GitHub sync inside the desktop app still reads `GITHUB_CLIENT_ID` from the environment, the same way the proxy does.
 
 See [docs/DESKTOP.md](docs/DESKTOP.md) for build/release signing requirements, IPC architecture, and troubleshooting.
 
