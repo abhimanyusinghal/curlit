@@ -1,0 +1,70 @@
+name: Desktop CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint:electron
+      - run: npm test
+
+  package:
+    name: Build ${{ matrix.name }}
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            platform: win
+            script: electron:build:win
+            artifacts: dist-desktop/*.exe
+          - name: macOS
+            os: macos-15-intel
+            platform: mac
+            script: electron:build:mac
+            artifacts: dist-desktop/*.dmg
+          - name: Linux x64
+            os: ubuntu-latest
+            platform: linux
+            script: electron:build:linux
+            artifacts: |
+              dist-desktop/*.AppImage
+              dist-desktop/*.deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm run ${{ matrix.script }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: curlit-desktop-ci-${{ matrix.platform }}
+          path: ${{ matrix.artifacts }}
+          if-no-files-found: error
+          retention-days: 7

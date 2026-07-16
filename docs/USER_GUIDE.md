@@ -62,6 +62,8 @@ The response will appear in the bottom panel with status code, timing, and size.
    - **XML**: XML editor with syntax highlighting
    - **Form Data**: Key-value pairs sent as multipart form data
    - **URL Encoded**: Key-value pairs sent as URL-encoded form data
+   - **Binary**: One file sent as the request body
+   - **GraphQL**: Query, variables, and schema documentation with optional introspection
 
 ### Authentication
 
@@ -71,6 +73,25 @@ The response will appear in the bottom panel with status code, timing, and size.
    - **Basic Auth**: Enter username and password (sent as Base64-encoded header)
    - **Bearer Token**: Enter a token (sent as `Authorization: Bearer <token>`)
    - **API Key**: Enter key name and value, choose header or query parameter
+   - **OAuth 2.0**: Configure token URL, client credentials, scopes, and client authentication placement; fetch and apply the access token
+
+Use the shield control beside Send to enable or disable TLS certificate verification for the current request. Disabling verification is intended only for controlled development systems and exposes the connection to interception.
+
+### GraphQL
+
+Select **GraphQL** in Body, enter a query and optional JSON variables, then send it as an HTTP request. **Fetch schema** performs an introspection request through the selected browser proxy or Electron IPC and populates schema documentation/autocomplete. Introspection uses the request URL, headers, authentication, variables, and TLS setting.
+
+### WebSockets
+
+Enter a `ws://` or `wss://` URL; CurlIt switches the tab to WebSocket mode automatically. Query parameters, headers, Basic/Bearer/API-key authentication, environment variables, and TLS verification apply during the handshake. Connect, send text frames, inspect received text or binary-frame metadata, search/filter the message log, clear it, or export it. Closing the request tab disconnects its socket.
+
+### Pre-request and Test Scripts
+
+The **Scripts** tab provides JavaScript editors. Pre-request scripts run before serialization and may read variables, set chain variables for later requests, and write console output. Test scripts run after a response and may add named assertions and update chain variables. Results appear in the response **Tests** tab and script output in **Console**. Imported backups, sync payloads, collections, and shared links strip scripts at trust boundaries; review and add automation locally.
+
+### OpenAPI and Postman Import
+
+**OpenAPI** accepts JSON or YAML OpenAPI 3.x and Swagger 2.0 documents, previews discovered operations, and imports selected operations as a collection. Collection import also accepts CurlIt JSON and Postman Collection v2.1, including nested folders (flattened), auth, headers, and supported body modes. Imported executable scripts are not trusted.
 
 ---
 
@@ -185,6 +206,29 @@ All sent requests are automatically recorded.
 - Click **Clear all** to delete all history
 
 History is limited to the last 100 requests.
+
+---
+
+## Browser Proxy, Local Agent, and Desktop App
+
+CurlIt separates the renderer from the process that performs network access:
+
+| Mode | Network process | Best use |
+|---|---|---|
+| Local browser development | `server/proxy.js` on port 3001 | Contributing to the web UI and proxy |
+| Hosted browser, Cloud mode | Deployed proxy | Public APIs reachable from the deployment |
+| Hosted browser, Local agent mode | Agent on `127.0.0.1:3001` | Localhost, VPN, and intranet APIs |
+| Electron desktop | Electron main process over IPC | Self-contained desktop API testing; no agent/proxy |
+
+### Local Agent
+
+Open **Agent**, download the binary for the machine architecture, run it, and wait for **Connected**. Select **Local agent** to route browser HTTP, OAuth, GraphQL introspection, GitHub device flow, and WebSockets through it. The UI checks `/api/health` every five seconds and displays the agent version. Keep the agent on a trusted workstation: it can reach everything the signed-in operating-system user can reach. Stop the process and switch back to **Cloud** when local routing is unnecessary.
+
+Build all three agent binaries with `npm run package:agent`; outputs are in `dist-agent/`. The release workflow publishes them as `curlit-agent-win-x64.exe`, `curlit-agent-macos-x64`, and `curlit-agent-linux-x64`.
+
+### Electron Desktop
+
+Run `npm run electron:dev` for development, `npm run electron:package` for an unpacked smoke-test app, or install a signed package from GitHub Releases. The footer version is generated from `package.json`. Desktop HTTP, OAuth, GraphQL, GitHub, and WebSocket operations use the narrow preload bridge; renderer code has no Node.js access. Application data remains localStorage in Electron's per-user profile. Details for signing, native platform packages, IPC, and troubleshooting are in [DESKTOP.md](DESKTOP.md).
 
 ---
 

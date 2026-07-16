@@ -4,5 +4,7 @@ import { afterEach } from 'vitest';
 
 afterEach(() => {
   cleanup();
-  localStorage.clear();
+  // Electron main/preload tests run in Vitest's Node environment, where the
+  // browser storage shim is intentionally unavailable.
+  if (typeof localStorage !== 'undefined') localStorage.clear();
 });

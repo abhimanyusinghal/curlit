@@ -1,0 +1,55 @@
+appId: com.curlit.app
+productName: CurlIt
+copyright: Copyright © 2026 CurlIt
+directories:
+  output: dist-desktop
+  buildResources: build
+files:
+  - electron/**/*
+  - dist/**/*
+  - package.json
+# electron-builder collects every production dependency declared in package.json.
+# Do not exclude node_modules here: electron/ipc.cjs loads undici and ws at runtime.
+asar: true
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+extraMetadata:
+  # electron-builder reads `main` from package.json; we point it at the CJS entry.
+  main: electron/main.cjs
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: icons/icon.png
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: icons/icon.png
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: icons/icon.png
+  category: Development
+  executableName: curlit
+  maintainer: Abhimanyu Singhal <abhimanyu.singhal@live.com>
+  synopsis: Modern API testing tool
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true

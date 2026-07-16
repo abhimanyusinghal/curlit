@@ -2,7 +2,7 @@
 
 ## System Architecture
 
-CurlIt is a client-server application with a React frontend and a minimal Express.js proxy backend.
+CurlIt uses one React renderer with three network transports: an Express cloud/development proxy, the same proxy bundled as an optional local agent, and a hardened Electron main process for the desktop app. Browser code selects cloud or local proxy URLs; desktop code detects the preload bridge and uses IPC.
 
 ### Frontend (React + TypeScript)
 
@@ -61,10 +61,12 @@ For HTTP requests:
 ```
 Send Button Click
   → resolveRequestVariables() (substitute {{vars}})
-  → sendRequest() 
-  → POST /api/proxy (to backend)
-  → Backend forwards to target API
+  → executeRequest() runs pre-request script and builds body/auth
+  → Browser: POST /api/proxy to cloud or local agent
+    OR Desktop: invoke curlit:http through the preload bridge
+  → Selected trusted process forwards to target API
   → Response returned to frontend
+  → test script runs; assertions/logs/chain variables are stored
   → Store updated with response
   → History entry created
   → UI re-renders with response data
@@ -79,6 +81,16 @@ The proxy server exists solely to bypass browser CORS restrictions. It:
 3. Returns the response (status, headers, body, cookies) to the frontend
 
 This allows CurlIt to make requests to any API without CORS issues.
+
+### Local Agent
+
+`npm run package:agent` bundles the Express proxy into Windows x64, macOS x64, and Linux x64 executables. It listens on loopback port 3001 and exposes health, HTTP, OAuth, GitHub device-flow, GraphQL introspection, and WebSocket proxy endpoints. The hosted UI switches to it through the Agent modal. It is not required by a local browser development session that already runs `server/proxy.js`, or by Electron.
+
+### Electron Desktop
+
+`electron/main.cjs` creates a renderer with `nodeIntegration: false`, `contextIsolation: true`, and `sandbox: true`. `electron/preload.cjs` exposes only the typed `window.curlit` methods. `electron/ipc.cjs` validates trusted senders, bounds payloads/concurrency, and performs HTTP, OAuth, GitHub, GraphQL, and WebSocket work. Navigation and new-window requests are denied except allow-listed external HTTP(S) URLs opened by the operating system.
+
+Production uses the `curlit://app` scheme, CSP, ASAR integrity, Electron fuses, hardened macOS runtime, and platform signing in tagged CI releases. See [DESKTOP.md](DESKTOP.md).
 
 #### Proxy Request Format
 
@@ -118,6 +130,8 @@ All data is persisted in the browser's localStorage:
 | `curlit-sidebar-width` | Sidebar width in px | Single value |
 | `curlit-request-height` | Request panel height in px | Single value |
 
+Additional keys store theme, proxy mode, sync metadata, chain variables, and workspace state. OAuth tokens and environment secrets are localStorage data, not encrypted application vault entries.
+
 ## Key Utilities
 
 ### HTTP Module (`src/utils/http.ts`)
@@ -129,6 +143,8 @@ All data is persisted in the browser's localStorage:
 - `getMethodColor()` / `getStatusColor()` - UI color helpers
 - `formatBytes()` / `formatTime()` - Display formatters
 - `tryFormatJson()` - Safe JSON pretty-printing
+
+Other focused modules cover request execution/scripts, GraphQL introspection, WebSocket lifecycle, backup/restore, share links, GitHub Gist sync, OpenAPI import, and Electron transport selection.
 
 ### Postman Import Module (`src/utils/postman.ts`)
 
@@ -151,13 +167,13 @@ CurlIt uses a layered testing strategy to catch regressions at the earliest and 
 | Vitest | Test runner for unit, store, component, and server tests |
 | React Testing Library | Component rendering and user interaction simulation |
 | Supertest | HTTP assertions for Express proxy server |
-| Playwright | Browser-based end-to-end tests |
+| Playwright | Browser workflows and a real Electron launch/IPC request |
 | jsdom | DOM environment for Vitest component tests |
 
 ### Test Layers
 
 ```
- E2E (Playwright)         -- Full browser workflows
+ E2E (Playwright)         -- Full browser workflows and Electron runtime smoke test
  Component (RTL)          -- React components with real store, mocked network
  Store (Vitest)           -- Zustand actions with localStorage
  Unit (Vitest)            -- Pure functions, zero dependencies

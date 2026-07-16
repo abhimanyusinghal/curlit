@@ -164,6 +164,8 @@ export function AgentSettingsModal({ open, onClose }: Props) {
                 <a
                   key={d.os}
                   href={`${AGENT_RELEASES_BASE}/${d.file}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-start gap-3 p-3 bg-dark-900 border border-dark-600 hover:border-accent-orange rounded-md transition-colors group"
                 >
                   <Download size={14} className="text-accent-orange mt-0.5 flex-shrink-0" />

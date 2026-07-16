@@ -114,7 +114,10 @@ export function decodePayload(encoded: string): SharePayload {
  * sender should have stripped them, but we defend against hand-crafted links).
  */
 export function sharedRequestToTabSeed(payload: SharePayload): Partial<RequestConfig> {
-  const { preRequestScript: _pre, testScript: _test, id: _id, ...rest } = payload.request;
+  const rest: Partial<RequestConfig> = { ...payload.request };
+  delete rest.preRequestScript;
+  delete rest.testScript;
+  delete rest.id;
   return { ...rest, name: rest.name || 'Shared Request' };
 }
 

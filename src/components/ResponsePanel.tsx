@@ -21,9 +21,6 @@ interface Props {
 type ResponseTab = 'body' | 'headers' | 'cookies' | 'tests' | 'console';
 
 export function ResponsePanel({ response, loading, requestId, protocol }: Props) {
-  if (protocol === 'websocket') {
-    return <WebSocketMessageLog requestId={requestId} />;
-  }
   const [activeTab, setActiveTab] = useState<ResponseTab>('body');
   const [copied, setCopied] = useState(false);
   const [bodyFormat, setBodyFormat] = useState<'pretty' | 'raw'>('pretty');
@@ -49,6 +46,10 @@ export function ResponsePanel({ response, loading, requestId, protocol }: Props)
       openSearchPanel(view);
     }
   }, []);
+
+  if (protocol === 'websocket') {
+    return <WebSocketMessageLog requestId={requestId} />;
+  }
 
   if (loading) {
     return (

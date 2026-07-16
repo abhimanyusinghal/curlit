@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { Agent } from 'undici';
 import { WebSocketServer, WebSocket as WsClient } from 'ws';
+import packageJson from '../package.json' with { type: 'json' };
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -24,7 +25,7 @@ const distDir = findDistDir();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-const AGENT_VERSION = '1.3.0';
+const AGENT_VERSION = packageJson.version;
 const AGENT_KIND = process.env.CURLIT_AGENT ? 'agent' : 'server';
 
 app.get('/api/health', (_req, res) => {

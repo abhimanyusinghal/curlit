@@ -70,7 +70,7 @@
 
 ### v1.5 -- Platform & Ecosystem
 
-- [ ] Electron or Tauri desktop app (no proxy server needed)
+- [x] Electron desktop app (no proxy server needed)
 - [ ] CLI tool (`curlit run collection.json`) for CI/CD pipelines
 - [ ] VS Code extension
 - [ ] Plugin system for community extensions

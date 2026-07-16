@@ -1,8 +1,44 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import http from 'node:http';
 import supertest from 'supertest';
 import { app } from '../proxy.js';
 
 const request = supertest(app);
+let upstreamServer;
+let upstreamUrl;
+
+beforeAll(async () => {
+  upstreamServer = http.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      if (req.url === '/status/404') res.statusCode = 404;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({
+        method: req.method,
+        path: req.url,
+        body: Buffer.concat(chunks).toString('utf8'),
+        contentType: req.headers['content-type'] || null,
+      }));
+    });
+  });
+
+  await new Promise((resolve, reject) => {
+    upstreamServer.once('error', reject);
+    upstreamServer.listen(0, '127.0.0.1', () => {
+      upstreamServer.off('error', reject);
+      const { port } = upstreamServer.address();
+      upstreamUrl = `http://127.0.0.1:${port}`;
+      resolve();
+    });
+  });
+});
+
+afterAll(async () => {
+  await new Promise((resolve, reject) => {
+    upstreamServer.close((error) => error ? reject(error) : resolve());
+  });
+});
 
 describe('Proxy Server', () => {
   it('returns 400 when URL is missing', async () => {
@@ -23,62 +59,69 @@ describe('Proxy Server', () => {
   });
 
   it('forwards GET request and returns status/headers/body', async () => {
-    // Use a real public API that should be available
     const res = await request.post('/api/proxy').send({
       method: 'GET',
-      url: 'https://httpbin.org/get',
+      url: `${upstreamUrl}/get`,
       headers: {},
     });
-    // httpbin might be slow/unavailable, so check structure regardless
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('status');
-    expect(res.body).toHaveProperty('statusText');
-    expect(res.body).toHaveProperty('headers');
-    expect(res.body).toHaveProperty('body');
-    expect(res.body).toHaveProperty('cookies');
-    expect(res.body).toHaveProperty('time');
+    expect(res.body.status).toBe(200);
+    expect(JSON.parse(res.body.body)).toMatchObject({ method: 'GET', path: '/get' });
   });
 
   it('forwards POST with JSON body', async () => {
     const res = await request.post('/api/proxy').send({
       method: 'POST',
-      url: 'https://httpbin.org/post',
+      url: `${upstreamUrl}/post`,
       headers: { 'Content-Type': 'application/json' },
       body: '{"test":"value"}',
       bodyType: 'json',
     });
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('status');
+    expect(res.body.status).toBe(200);
+    expect(JSON.parse(res.body.body)).toMatchObject({
+      method: 'POST',
+      path: '/post',
+      body: '{"test":"value"}',
+      contentType: 'application/json',
+    });
   });
 
   it('defaults method to GET when not specified', async () => {
     const res = await request.post('/api/proxy').send({
-      url: 'https://httpbin.org/get',
+      url: `${upstreamUrl}/get`,
     });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe(200);
+    expect(JSON.parse(res.body.body)).toMatchObject({ method: 'GET', path: '/get' });
   });
 
   it('handles form-data body type', async () => {
     const res = await request.post('/api/proxy').send({
       method: 'POST',
-      url: 'https://httpbin.org/post',
+      url: `${upstreamUrl}/post`,
       headers: {},
       body: { username: 'admin', password: 'test' },
       bodyType: 'form-data',
     });
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('status');
+    expect(res.body.status).toBe(200);
+    expect(JSON.parse(res.body.body)).toMatchObject({
+      method: 'POST',
+      path: '/post',
+      body: 'username=admin&password=test',
+      contentType: 'application/x-www-form-urlencoded',
+    });
   });
 
   it('returns response body structure with all fields', async () => {
     const res = await request.post('/api/proxy').send({
       method: 'GET',
-      url: 'https://httpbin.org/status/404',
+      url: `${upstreamUrl}/status/404`,
       headers: {},
     });
     expect(res.status).toBe(200);
-    expect(typeof res.body.status).toBe('number');
+    expect(res.body.status).toBe(404);
     expect(typeof res.body.time).toBe('number');
     expect(typeof res.body.headers).toBe('object');
     expect(Array.isArray(res.body.cookies)).toBe(true);

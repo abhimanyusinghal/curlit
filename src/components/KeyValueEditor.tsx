@@ -57,7 +57,10 @@ export function KeyValueEditor({
   const descriptionsRef = useRef<DescriptionSnapshot>(new Map());
   const bulkTextRef = useRef(bulkText);
   const snapshotTextRef = useRef('');
-  bulkTextRef.current = bulkText;
+
+  useEffect(() => {
+    bulkTextRef.current = bulkText;
+  }, [bulkText]);
 
   const commitBulkText = useCallback(() => {
     if (bulkTextRef.current === snapshotTextRef.current) return;
@@ -92,6 +95,7 @@ export function KeyValueEditor({
     const text = pairsToText(pairs);
     snapshotTextRef.current = text;
     setBulkText(text);
+    bulkTextRef.current = text;
     setBulkEdit(true);
   }, [pairs]);
 
@@ -99,6 +103,11 @@ export function KeyValueEditor({
     commitBulkText();
     setBulkEdit(false);
   }, [commitBulkText]);
+
+  const updateBulkText = useCallback((text: string) => {
+    bulkTextRef.current = text;
+    setBulkText(text);
+  }, []);
 
   const updatePair = (id: string, updates: Partial<KeyValuePair>) => {
     onChange(pairs.map(p => (p.id === id ? { ...p, ...updates } : p)));
@@ -134,7 +143,7 @@ export function KeyValueEditor({
       {bulkEdit ? (
         <textarea
           value={bulkText}
-          onChange={e => setBulkText(e.target.value)}
+          onChange={e => updateBulkText(e.target.value)}
           onBlur={commitBulkText}
           onKeyDown={handleBulkKeyDown}
           placeholder={placeholderText}

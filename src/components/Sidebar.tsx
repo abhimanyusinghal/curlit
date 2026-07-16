@@ -14,6 +14,7 @@ import {
 import { useAppStore, type SidebarView } from '../store';
 import { MethodBadge } from './MethodBadge';
 import { KeyValueEditor } from './KeyValueEditor';
+import { TextPromptModal } from './TextPromptModal';
 import type { Collection, RequestConfig } from '../types';
 import { isPostmanCollection, parsePostmanCollection } from '../utils/postman';
 import { parseOpenApiInput, isOpenApiSpec, parseOpenApiSpec } from '../utils/openapi';
@@ -80,6 +81,7 @@ function CollectionsPanel({ onRunCollection }: { onRunCollection?: (id: string) 
   const createCollection = useAppStore(s => s.createCollection);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
+  const [showNewCollection, setShowNewCollection] = useState(false);
 
   const handleImport = () => {
     try {
@@ -152,10 +154,7 @@ function CollectionsPanel({ onRunCollection }: { onRunCollection?: (id: string) 
             <Import size={14} />
           </button>
           <button
-            onClick={() => {
-              const name = prompt('Collection name:');
-              if (name) createCollection(name);
-            }}
+            onClick={() => setShowNewCollection(true)}
             className="p-1 text-dark-400 hover:text-dark-200 rounded cursor-pointer"
             title="New collection"
           >
@@ -196,6 +195,19 @@ function CollectionsPanel({ onRunCollection }: { onRunCollection?: (id: string) 
       ) : (
         collections.map(c => <CollectionItem key={c.id} collection={c} onRun={onRunCollection} />)
       )}
+
+      <TextPromptModal
+        open={showNewCollection}
+        title="New Collection"
+        label="Collection name"
+        placeholder="My API"
+        submitLabel="Create"
+        onSubmit={name => {
+          createCollection(name);
+          setShowNewCollection(false);
+        }}
+        onClose={() => setShowNewCollection(false)}
+      />
     </div>
   );
 }
@@ -203,6 +215,7 @@ function CollectionsPanel({ onRunCollection }: { onRunCollection?: (id: string) 
 function CollectionItem({ collection, onRun }: { collection: Collection; onRun?: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showRename, setShowRename] = useState(false);
   const deleteCollection = useAppStore(s => s.deleteCollection);
   const renameCollection = useAppStore(s => s.renameCollection);
   const openRequestFromCollection = useAppStore(s => s.openRequestFromCollection);
@@ -257,9 +270,8 @@ function CollectionItem({ collection, onRun }: { collection: Collection; onRun?:
               </button>
               <button
                 onClick={() => {
-                  const name = prompt('New name:', collection.name);
-                  if (name) renameCollection(collection.id, name);
                   setShowMenu(false);
+                  setShowRename(true);
                 }}
                 className="w-full text-left px-3 py-1.5 text-xs text-dark-200 hover:bg-dark-600 cursor-pointer"
               >
@@ -321,6 +333,19 @@ function CollectionItem({ collection, onRun }: { collection: Collection; onRun?:
           )}
         </div>
       )}
+
+      <TextPromptModal
+        open={showRename}
+        title="Rename Collection"
+        label="Collection name"
+        initialValue={collection.name}
+        submitLabel="Rename"
+        onSubmit={name => {
+          renameCollection(collection.id, name);
+          setShowRename(false);
+        }}
+        onClose={() => setShowRename(false)}
+      />
     </div>
   );
 }
@@ -424,16 +449,14 @@ function EnvironmentsPanel() {
   const updateEnvironment = useAppStore(s => s.updateEnvironment);
   const setActiveEnvironment = useAppStore(s => s.setActiveEnvironment);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showNewEnvironment, setShowNewEnvironment] = useState(false);
 
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-3 py-2">
         <span className="text-xs text-dark-300 font-medium uppercase tracking-wider">Environments</span>
         <button
-          onClick={() => {
-            const name = prompt('Environment name:');
-            if (name) createEnvironment(name);
-          }}
+          onClick={() => setShowNewEnvironment(true)}
           className="p-1 text-dark-400 hover:text-dark-200 rounded cursor-pointer"
           title="New environment"
         >
@@ -491,6 +514,19 @@ function EnvironmentsPanel() {
           </div>
         ))
       )}
+
+      <TextPromptModal
+        open={showNewEnvironment}
+        title="New Environment"
+        label="Environment name"
+        placeholder="Development"
+        submitLabel="Create"
+        onSubmit={name => {
+          createEnvironment(name);
+          setShowNewEnvironment(false);
+        }}
+        onClose={() => setShowNewEnvironment(false)}
+      />
     </div>
   );
 }

@@ -10,13 +10,12 @@ test.describe('Collections', () => {
   });
 
   test('create collection via + button', async ({ page }) => {
-    // Click the "New collection" button (has title attribute)
-    page.on('dialog', async dialog => {
-      await dialog.accept('Test API');
-    });
     await page.locator('button[title="New collection"]').click();
+    const dialog = page.getByRole('dialog', { name: 'New Collection' });
+    await dialog.getByRole('textbox', { name: 'Collection name' }).fill('Test API');
+    await dialog.getByRole('button', { name: 'Create' }).click();
 
     // Verify collection appears in sidebar
-    await expect(page.locator('text=Test API')).toBeVisible();
+    await expect(page.getByText('Test API', { exact: true })).toBeVisible();
   });
 });

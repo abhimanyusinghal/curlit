@@ -2,6 +2,15 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Collection Runner', () => {
   test.beforeEach(async ({ page }) => {
+    await page.route('**/api/proxy', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 200, statusText: 'OK', headers: {}, body: '{}', cookies: [], time: 1, size: 2,
+        }),
+      });
+    });
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     await page.evaluate(() => localStorage.clear());

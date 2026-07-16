@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Save, Plus } from 'lucide-react';
 import { useAppStore } from '../store';
+import { TextPromptModal } from './TextPromptModal';
 
 interface Props {
   open: boolean;
@@ -10,6 +11,7 @@ interface Props {
 export function SaveRequestModal({ open, onClose }: Props) {
   const collections = useAppStore(s => s.collections);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showNewCollection, setShowNewCollection] = useState(false);
 
   if (!open) return null;
 
@@ -36,16 +38,11 @@ export function SaveRequestModal({ open, onClose }: Props) {
     onClose();
   };
 
-  const handleCreateAndSave = () => {
-    const name = prompt('Collection name:');
-    if (!name) return;
-    useAppStore.getState().createCollection(name);
-    const newCol = useAppStore.getState().collections[useAppStore.getState().collections.length - 1];
-    setSelectedId(newCol.id);
-  };
+  const handleCreateAndSave = () => setShowNewCollection(true);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-dark-800 border border-dark-600 rounded-xl shadow-2xl w-full max-w-sm mx-4">
         <div className="flex items-center justify-between px-4 py-3 border-b border-dark-600">
           <div className="flex items-center gap-2">
@@ -107,6 +104,21 @@ export function SaveRequestModal({ open, onClose }: Props) {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+      <TextPromptModal
+        open={showNewCollection}
+        title="New Collection"
+        label="Collection name"
+        placeholder="My API"
+        submitLabel="Create"
+        onSubmit={name => {
+          useAppStore.getState().createCollection(name);
+          const newCol = useAppStore.getState().collections.at(-1);
+          if (newCol) setSelectedId(newCol.id);
+          setShowNewCollection(false);
+        }}
+        onClose={() => setShowNewCollection(false)}
+      />
+    </>
   );
 }

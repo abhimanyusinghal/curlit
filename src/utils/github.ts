@@ -9,6 +9,7 @@
  */
 
 import { proxyUrl } from './proxyConfig';
+import { isDesktop, desktopApi } from './desktop';
 
 // ─── Device flow ─────────────────────────────────────────────────────────────
 
@@ -29,47 +30,65 @@ export type DevicePollResult =
   | { status: 'error'; message: string };
 
 export async function fetchSyncStatus(): Promise<{ configured: boolean }> {
+  if (isDesktop()) {
+    return desktopApi().githubStatus();
+  }
   const res = await fetch(proxyUrl('/api/github/status'));
   if (!res.ok) return { configured: false };
   return res.json();
 }
 
 export async function requestDeviceCode(): Promise<DeviceCode> {
-  const res = await fetch(proxyUrl('/api/github/device-code'), { method: 'POST' });
-  const data = await res.json();
-  if (!res.ok || !data.device_code) {
-    throw new Error(data.error || 'Could not start GitHub sign-in');
+  let data: Record<string, unknown>;
+  let ok: boolean;
+  if (isDesktop()) {
+    const result = await desktopApi().githubDeviceCode();
+    const status = (result.__status as number) ?? 200;
+    ok = status >= 200 && status < 300;
+    data = result;
+  } else {
+    const res = await fetch(proxyUrl('/api/github/device-code'), { method: 'POST' });
+    data = await res.json();
+    ok = res.ok;
+  }
+  if (!ok || !data.device_code) {
+    throw new Error((data.error as string) || 'Could not start GitHub sign-in');
   }
   return {
-    deviceCode: data.device_code,
-    userCode: data.user_code,
-    verificationUri: data.verification_uri,
-    interval: data.interval ?? 5,
-    expiresIn: data.expires_in ?? 900,
+    deviceCode: data.device_code as string,
+    userCode: data.user_code as string,
+    verificationUri: data.verification_uri as string,
+    interval: (data.interval as number) ?? 5,
+    expiresIn: (data.expires_in as number) ?? 900,
   };
 }
 
 export async function pollDeviceToken(deviceCode: string): Promise<DevicePollResult> {
-  const res = await fetch(proxyUrl('/api/github/device-token'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ deviceCode }),
-  });
-  const data = await res.json();
+  let data: Record<string, unknown>;
+  if (isDesktop()) {
+    data = await desktopApi().githubDeviceToken(deviceCode);
+  } else {
+    const res = await fetch(proxyUrl('/api/github/device-token'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceCode }),
+    });
+    data = await res.json();
+  }
 
-  if (data.access_token) return { status: 'ok', accessToken: data.access_token };
+  if (data.access_token) return { status: 'ok', accessToken: data.access_token as string };
 
   switch (data.error) {
     case 'authorization_pending':
       return { status: 'pending' };
     case 'slow_down':
-      return { status: 'slow_down', intervalHint: data.interval };
+      return { status: 'slow_down', intervalHint: data.interval as number | undefined };
     case 'expired_token':
       return { status: 'expired' };
     case 'access_denied':
       return { status: 'denied' };
     default:
-      return { status: 'error', message: data.error_description || data.error || 'Sign-in failed' };
+      return { status: 'error', message: (data.error_description as string) || (data.error as string) || 'Sign-in failed' };
   }
 }
 
