@@ -4,6 +4,7 @@ import { createDefaultRequest } from '../src/types';
 import type { AuthConfig, Collection, FormDataEntry, KeyValuePair, RequestConfig } from '../src/types';
 import { setFile } from '../src/utils/fileStore';
 import { resolveVariables } from '../src/utils/http';
+import { parseResponseSchemaConfig } from '../src/utils/responseSchemaConfig';
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object`);
@@ -101,6 +102,7 @@ function parseRequest(value: unknown, index: number): RequestConfig {
     sslVerification: boolean(request.sslVerification, 'sslVerification'),
     preRequestScript: string(request.preRequestScript, 'preRequestScript', ''),
     testScript: string(request.testScript, 'testScript', ''),
+    ...(request.responseSchema !== undefined ? { responseSchema: parseResponseSchemaConfig(request.responseSchema) } : {}),
     body: {
       type, raw: string(body.raw, 'body.raw', ''), formData, urlencoded: pairs(body.urlencoded, 'body.urlencoded'),
       ...(binary ? { binaryFile: {

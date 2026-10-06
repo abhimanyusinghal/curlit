@@ -25,7 +25,8 @@ App
 │   │   ├── ParamsTab → KeyValueEditor
 │   │   ├── HeadersTab → KeyValueEditor
 │   │   ├── BodyTab → CodeMirror / KeyValueEditor
-│   │   └── AuthTab → form fields
+│   │   ├── AuthTab → form fields
+│   │   └── SchemaTab → ResponseSchemaEditor
 │   └── ResponsePanel
 │       ├── BodyTab → CodeMirror (read-only)
 │       ├── HeadersTab → table
@@ -66,6 +67,7 @@ Send Button Click
     OR Desktop: invoke curlit:http through the preload bridge
   → Selected trusted process forwards to target API
   → Response returned to frontend
+  → optional response schema validation runs in a worker
   → test script runs; assertions/logs/chain variables are stored
   → Store updated with response
   → History entry created
@@ -119,7 +121,7 @@ Production uses the `curlit://app` scheme, CSP, ASAR integrity, Electron fuses, 
 
 ### CLI and Run Reports
 
-`cli/index.ts` loads and validates collection/environment JSON, applies explicit variable overrides, and calls the shared `runCollection()` loop. `executeRequestWithScripts()` accepts runtime adapters for sending requests and executing scripts. The browser/desktop adapters remain the default; the CLI adapter uses Node fetch with per-request Undici agents, cancellation, and timeouts.
+`cli/index.ts` loads and validates collection/environment JSON, applies explicit variable overrides, and calls the shared `runCollection()` loop with an executor. `requestExecutorCore.ts` accepts runtime adapters for sending requests, executing scripts, and validating schemas. `requestExecutor.ts` supplies the browser/desktop defaults; the CLI imports the core directly and uses Node fetch with per-request Undici agents, cancellation, and timeouts.
 
 `prepareRequest()` supplies common URL, authentication, body, and header handling. CLI file attachments are loaded into the same in-memory file store from explicit paths relative to the collection JSON. No UI storage is needed. Each CLI run starts with fresh chain variables.
 
@@ -127,7 +129,13 @@ The CLI runs the shared script engine inside a VM context in a worker, with JSON
 
 `src/utils/runReport.ts` collects runner events into a versioned report shared by the CLI and the collection runner modal. JSON preserves assertion detail; JUnit produces one test case per request. Reports intentionally omit request payloads, credentials, response bodies, and script logs. CLI failures map to exit codes; UI results can be downloaded after completion or stopping.
 
-`npm run build:cli` type-checks and bundles the CLI and worker into an independently installable `dist-cli/` package. See [CLI.md](CLI.md).
+`npm run build:cli` type-checks and bundles the CLI and workers into an independently installable `dist-cli/` package. See [CLI.md](CLI.md).
+
+### Response Schema Validation
+
+Requests optionally store `responseSchema: { enabled, schema }`, retaining schema text even while it is incomplete or disabled. Existing requests need no migration. `ResponseSchemaEditor` supplies a JSON editor; the shared executor runs enabled validation before test scripts and combines both sets of assertions. Configuration/worker errors retain the original HTTP response and produce an errored run; constraint violations produce a failed run.
+
+`src/utils/responseSchema.ts` uses Ajv and ajv-formats for draft-07 validation without coercion, defaults, property removal, or network schema loading. It returns JSON Pointer paths and caps displayed errors. The browser and Electron renderer use a Vite module worker, loaded only when validation is enabled. The CLI uses `cli/schema-worker.ts` in a Node worker with a 64 MB heap limit. Each adapter waits for worker readiness (up to ten seconds), then enforces a two-second processing budget and terminates the worker on completion, error, timeout, or cancellation. The validator has no dependency on the UI or transport.
 
 ### Persistence Layer
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { runCollection, type RunnerEvent } from '../collectionRunner';
+import { runCollection as run, type RunnerEvent, type RunnerOptions } from '../collectionRunner';
 import { createDefaultRequest } from '../../types';
 import type { ExecuteResult } from '../requestExecutor';
 import type { ResponseData } from '../../types';
@@ -10,6 +10,10 @@ vi.mock('../requestExecutor', () => ({
 
 import { executeRequestWithScripts } from '../requestExecutor';
 const mockExec = vi.mocked(executeRequestWithScripts);
+
+function runCollection(options: Omit<RunnerOptions, 'execute'>) {
+  return run({ ...options, execute: mockExec });
+}
 
 function okResult(overrides: Partial<ExecuteResult> = {}): ExecuteResult {
   const response: ResponseData = {

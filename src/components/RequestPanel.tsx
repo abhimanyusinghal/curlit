@@ -15,8 +15,9 @@ import { GraphQLEditor } from './GraphQLEditor';
 import { WebSocketMessageComposer } from './WebSocketMessageComposer';
 import { fetchOAuth2Token, buildAuthorizationUrl, isTokenExpired } from '../utils/oauth';
 import { resolveOAuth2Variables } from '../utils/http';
+import { ResponseSchemaEditor } from './ResponseSchemaEditor';
 
-type RequestTabType = 'params' | 'headers' | 'body' | 'auth' | 'scripts';
+type RequestTabType = 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'schema';
 type WsRequestTabType = 'message' | 'params' | 'headers' | 'auth';
 
 interface Props {
@@ -110,6 +111,7 @@ function HttpRequestPanel({ request }: { request: RequestConfig }) {
     { id: 'body', label: 'Body' },
     { id: 'auth', label: 'Auth' },
     { id: 'scripts', label: 'Scripts', count: hasScripts ? 1 : undefined },
+    { id: 'schema', label: 'Schema', count: request.responseSchema?.enabled ? 1 : undefined },
   ];
 
   return (
@@ -168,6 +170,7 @@ function HttpRequestPanel({ request }: { request: RequestConfig }) {
         {activeTab === 'scripts' && (
           <ScriptsEditor request={request} />
         )}
+        {activeTab === 'schema' && <ResponseSchemaEditor request={request} />}
       </div>
     </div>
   );
@@ -869,4 +872,3 @@ function defaultOAuth2Config(): import('../types').OAuth2Config {
     callbackUrl: '',
   };
 }
-

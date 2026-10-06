@@ -108,6 +108,13 @@ export interface RequestConfig {
   sslVerification?: boolean;
   preRequestScript?: string;
   testScript?: string;
+  responseSchema?: ResponseSchemaConfig;
+}
+
+export interface ResponseSchemaConfig {
+  enabled: boolean;
+  /** JSON Schema draft-07 source, retained as text so unfinished edits can be saved. */
+  schema: string;
 }
 
 export interface TestResult {

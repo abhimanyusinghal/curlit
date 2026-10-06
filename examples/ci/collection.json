@@ -6,6 +6,7 @@
         "name": "Health check",
         "method": "GET",
         "url": "{{baseUrl}}/health",
+        "responseSchema": { "enabled": true, "schema": "{\"type\":\"object\",\"required\":[\"ready\"],\"properties\":{\"ready\":{\"type\":\"boolean\"}}}" },
         "testScript": "test('healthy', () => expect(response.status).toBe(200)); test('ready', () => expect(response.json.ready).toBe(true)); curlit.chain.message = 'hello from CI';"
       },
       {

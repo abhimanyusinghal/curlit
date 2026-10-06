@@ -3,14 +3,15 @@ import { Worker } from 'node:worker_threads';
 import { Agent } from 'undici';
 import type { RequestConfig, ResponseData } from '../src/types';
 import { prepareRequest } from '../src/utils/http';
-import type { ExecutionRuntime } from '../src/utils/requestExecutor';
+import type { ExecutionRuntime } from '../src/utils/requestExecutorCore';
 import type { PreRequestResult, TestScriptResult } from '../src/utils/scriptEngine';
+import { RESPONSE_SCHEMA_TIMEOUT_MS, type SchemaValidationResult } from '../src/utils/responseSchemaConfig';
 
-function script<T>(method: 'runPreRequestScript' | 'runTestScript', args: unknown[], timeoutMs: number, signal: AbortSignal): Promise<T> {
+function workerTask<T>(file: string, workerData: unknown, timeoutMs: number, timeoutMessage: string, signal: AbortSignal, waitForReady = false): Promise<T> {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
-    const worker = new Worker(join(__dirname, 'script-worker.cjs'), {
-      workerData: { method, args, timeoutMs },
+    const worker = new Worker(join(__dirname, file), {
+      workerData,
       env: {}, execArgv: [], stdout: true, stderr: true,
       resourceLimits: { maxOldGenerationSizeMb: 64, stackSizeMb: 4 },
     });
@@ -24,14 +25,24 @@ function script<T>(method: 'runPreRequestScript' | 'runTestScript', args: unknow
       if (error) reject(error); else resolve(result!);
     };
     const abort = () => finish(new Error('Run interrupted'));
-    // VM timeout measures execution; this also bounds worker startup/serialization.
-    const timer = setTimeout(() => finish(new Error(`Script worker exceeded its ${timeoutMs}ms execution budget`)), timeoutMs + 5_000);
+    let timer = setTimeout(() => finish(new Error(waitForReady ? 'Schema validation worker did not start' : timeoutMessage)), waitForReady ? 10_000 : timeoutMs);
     signal.addEventListener('abort', abort, { once: true });
-    worker.once('message', (message: { error?: string; result?: T }) => finish(message.error ? new Error(message.error) : undefined, message.result));
+    worker.on('message', (message: { ready?: boolean; error?: string; result?: T }) => {
+      if (waitForReady && message.ready) {
+        clearTimeout(timer);
+        timer = setTimeout(() => finish(new Error(timeoutMessage)), timeoutMs);
+      } else finish(message.error ? new Error(message.error) : undefined, message.result);
+    });
     worker.once('error', error => finish(error));
-    worker.once('exit', code => { if (!settled) finish(new Error(`Script worker exited before returning a result (code ${code})`)); });
+    worker.once('exit', code => { if (!settled) finish(new Error(`Worker exited before returning a result (code ${code})`)); });
     if (signal.aborted) abort();
   });
+}
+
+function script<T>(method: 'runPreRequestScript' | 'runTestScript', args: unknown[], timeoutMs: number, signal: AbortSignal): Promise<T> {
+  // VM timeout measures execution; this also bounds worker startup/serialization.
+  return workerTask('script-worker.cjs', { method, args, timeoutMs }, timeoutMs + 5_000,
+    `Script worker exceeded its ${timeoutMs}ms execution budget`, signal);
 }
 
 export function createNodeRuntime(timeoutMs: number, scriptTimeoutMs: number, runSignal: AbortSignal): ExecutionRuntime {
@@ -79,5 +90,9 @@ export function createNodeRuntime(timeoutMs: number, scriptTimeoutMs: number, ru
     },
     runPreRequestScript: (...args) => script<PreRequestResult>('runPreRequestScript', args, scriptTimeoutMs, runSignal),
     runTestScript: (...args) => script<TestScriptResult>('runTestScript', args, scriptTimeoutMs, runSignal),
+    validateResponseSchema: (schema, body, signal) => workerTask<SchemaValidationResult>(
+      'schema-worker.cjs', { schema, body }, RESPONSE_SCHEMA_TIMEOUT_MS,
+      `Response schema validation exceeded ${RESPONSE_SCHEMA_TIMEOUT_MS}ms`, signal ?? runSignal, true,
+    ),
   };
 }

@@ -53,6 +53,16 @@ function sampleHistoryEntry(url = 'https://example.com'): HistoryEntry {
 // ─── createBackup ────────────────────────────────────────────────────────────
 
 describe('createBackup', () => {
+  it('retains schema settings through JSON backup and restore', () => {
+    const collection = sampleCollection();
+    collection.requests[0].responseSchema = { enabled: false, schema: '{unfinished' };
+    const backup = parseBackup(JSON.stringify(createBackup({ ...emptySnapshot(), collections: [collection] })));
+    for (const mode of ['replace', 'merge'] as const) {
+      const restored = applyBackup(emptySnapshot(), backup, mode);
+      expect(restored.collections[0].requests[0].responseSchema).toEqual(collection.requests[0].responseSchema);
+    }
+  });
+
   it('wraps snapshot with versioned envelope', () => {
     const snapshot = emptySnapshot();
     const backup = createBackup(snapshot);

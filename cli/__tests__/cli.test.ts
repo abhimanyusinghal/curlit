@@ -14,6 +14,11 @@ const hits: string[] = [];
 const server = createServer(async (request, response) => {
   hits.push(request.url!);
   if (request.url === '/hang') { response.writeHead(200); response.write('partial'); return; }
+  if (request.url === '/schema-slow') {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify('a'.repeat(35) + '!'));
+    return;
+  }
   const parts: Buffer[] = [];
   for await (const part of request) parts.push(part);
   const body = Buffer.concat(parts);
@@ -67,6 +72,63 @@ function request(overrides: Record<string, unknown> = {}) {
 }
 
 describe('packaged CLI against real HTTP endpoints', () => {
+  it('combines schema and script assertions in JSON and JUnit reports', async () => {
+    const schema = (type: string) => ({ enabled: true, schema: JSON.stringify({ type: 'object', required: ['method'], properties: { method: { type } } }) });
+    const file = await jsonFile('schemas.json', { requests: [
+      request({ name: 'Valid schema', responseSchema: schema('string') }),
+      request({ name: 'Mismatch', responseSchema: schema('integer'), testScript: 'test("status", () => expect(response.status).toBe(200));' }),
+      request({ name: 'Invalid schema', responseSchema: { enabled: true, schema: '{' } }),
+      request({ name: 'Disabled schema', responseSchema: { enabled: false, schema: '{' } }),
+    ] });
+    const result = await cli(['run', file, '--report-json', 'result.json', '--report-junit', 'result.xml']);
+    expect(result.code).toBe(1);
+    const report = JSON.parse(await readFile(join(directory, 'result.json'), 'utf8'));
+    expect(report.summary).toMatchObject({ total: 4, passed: 2, failed: 1, errored: 1 });
+    expect(report.requests[0].tests).toEqual([{ name: 'Response schema', passed: true }]);
+    expect(report.requests[1].tests).toEqual([
+      { name: 'Response schema: /method', passed: false, error: 'must be integer' },
+      { name: 'status', passed: true },
+    ]);
+    expect(report.requests[2].error).toContain('not valid JSON');
+    expect(report.requests[3].tests).toEqual([]);
+    const xml = await readFile(join(directory, 'result.xml'), 'utf8');
+    expect(xml).toContain('tests="4" failures="1" errors="1" skipped="0"');
+    expect(xml).toContain('Response schema: /method');
+    expect(hits).toHaveLength(4);
+  });
+
+  it('returns success for a matching schema and bails on a mismatch', async () => {
+    const file = await jsonFile('schemas.json', { requests: [request({ responseSchema: { enabled: true, schema: 'true' } })] });
+    expect((await cli(['run', file])).code).toBe(0);
+    hits.length = 0;
+    await jsonFile('schemas.json', { requests: [request({ responseSchema: { enabled: true, schema: 'false' } }), request()] });
+    expect((await cli(['run', file, '--bail', '--report-json', 'result.json'])).code).toBe(1);
+    expect(JSON.parse(await readFile(join(directory, 'result.json'), 'utf8')).summary).toMatchObject({ failed: 1, skipped: 1 });
+    expect(hits).toHaveLength(1);
+  });
+
+  it('terminates a slow schema worker and continues the collection', async () => {
+    const file = await jsonFile('schemas.json', { requests: [
+      request({ url: `${base}/schema-slow`, responseSchema: { enabled: true, schema: JSON.stringify({ type: 'string', pattern: '^(a+)+$' }) } }),
+      request(),
+    ] });
+    const result = await cli(['run', file, '--report-json', 'result.json']);
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain('Response schema validation exceeded 2000ms');
+    expect(JSON.parse(await readFile(join(directory, 'result.json'), 'utf8')).summary).toMatchObject({ passed: 1, errored: 1 });
+    expect(hits).toEqual(['/schema-slow', '/ok']);
+  }, 15_000);
+
+  it('rejects malformed schema configuration before making requests', async () => {
+    for (const responseSchema of ['{}', null, { enabled: 'yes', schema: '{}' }, { enabled: true, schema: {} }]) {
+      const file = await jsonFile('invalid.json', { requests: [request({ responseSchema })] });
+      const result = await cli(['run', file]);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('responseSchema');
+    }
+    expect(hits).toHaveLength(0);
+  });
+
   it('runs UI exports with environment overrides, scripts, GraphQL and chaining, and writes reports', async () => {
     const file = await jsonFile('collection.json', { collections: [{ name: 'CI suite', requests: [
       request({

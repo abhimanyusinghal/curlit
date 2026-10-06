@@ -13,7 +13,7 @@ const engine = await build({
   bundle: true, format: 'iife', globalName: 'CurlitScripts', target: 'es2023', write: false,
 });
 await build({
-  entryPoints: [path.join(root, 'cli/index.ts'), path.join(root, 'cli/script-worker.ts')],
+  entryPoints: ['index', 'script-worker', 'schema-worker'].map(name => path.join(root, `cli/${name}.ts`)),
   bundle: true, platform: 'node', format: 'cjs', target: 'node22',
   outdir, outExtension: { '.js': '.cjs' }, packages: 'external',
   define: { __CURLIT_SCRIPT_ENGINE__: JSON.stringify(engine.outputFiles[0].text) },
@@ -24,9 +24,13 @@ await writeFile(path.join(outdir, 'package.json'), JSON.stringify({
   description: 'Run CurlIt API collections and export CI test reports.',
   license: sourcePackage.license,
   bin: { curlit: 'index.cjs' },
-  files: ['index.cjs', 'script-worker.cjs', 'README.md', 'LICENSE'],
+  files: ['index.cjs', 'script-worker.cjs', 'schema-worker.cjs', 'README.md', 'LICENSE'],
   engines: sourcePackage.engines,
-  dependencies: { undici: sourcePackage.dependencies.undici },
+  dependencies: {
+    undici: sourcePackage.dependencies.undici,
+    ajv: sourcePackage.dependencies.ajv,
+    'ajv-formats': sourcePackage.dependencies['ajv-formats'],
+  },
 }, null, 2) + '\n');
 await copyFile(path.join(root, 'docs/CLI.md'), path.join(outdir, 'README.md'));
 await copyFile(path.join(root, 'LICENSE'), path.join(outdir, 'LICENSE'));

@@ -37,7 +37,7 @@ test.describe('Electron desktop runtime', () => {
     await new Promise<void>(resolve => api?.close(() => resolve()));
   });
 
-  test('loads the packaged renderer, shows its version, and sends HTTP over IPC', async () => {
+  test('loads the packaged renderer, sends HTTP over IPC, and validates schemas in a worker', async () => {
     const page = await app.firstWindow();
     await expect(page).toHaveTitle('CurlIt - API Testing Tool');
     await expect(page.getByText(/CurlIt v\d+\.\d+\.\d+/)).toBeVisible();
@@ -49,5 +49,18 @@ test.describe('Electron desktop runtime', () => {
     await expect(page.getByText(/electron-ipc/)).toBeVisible();
     await page.getByRole('button', { name: /Headers/ }).last().click();
     await expect(page.getByText(/x-curlit-method/i)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Schema', exact: true }).click();
+    const editor = page.getByRole('textbox', { name: 'Response schema JSON' });
+    await editor.fill(JSON.stringify({ type: 'object', required: ['source'], properties: { source: { const: 'electron-ipc' } } }));
+    await page.getByRole('checkbox', { name: 'Validate response against schema' }).check();
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await page.getByRole('button', { name: /Tests/ }).click();
+    await expect(page.getByText('1 passed', { exact: true })).toBeVisible();
+
+    await editor.fill(JSON.stringify({ type: 'object', properties: { source: { type: 'integer' } } }));
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByText('Response schema: /source', { exact: true })).toBeVisible();
+    await expect(page.getByText('must be integer', { exact: true })).toBeVisible();
   });
 });

@@ -12,6 +12,7 @@ A fast, modern, open-source API testing tool for engineers who build and validat
 - **Full HTTP Client** -- GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS with color-coded method badges
 - **Request Builder** -- Query params, headers, body (JSON, text, XML, multipart files, URL encoded, binary, GraphQL), SSL controls, and auth (Basic, Bearer, API key, OAuth 2.0)
 - **Automation** -- Pre-request and test scripts, assertions, chain variables, console output, sequential collection runs, and JSON/JUnit report export
+- **Response Schemas** -- Validate JSON responses against draft-07 schemas, with field-level failures in the browser, desktop app, and CLI reports
 - **CLI & CI/CD** -- Run exported collections headlessly with environment overrides, timeouts, failure exit codes, and test reports
 - **WebSockets** -- Connect with request headers/auth, send messages, inspect text/binary frames, and export message logs
 - **Response Viewer** -- Syntax-highlighted body (JSON, XML, HTML), headers table, cookies table, status/time/size metrics

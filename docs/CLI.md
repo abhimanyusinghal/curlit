@@ -20,7 +20,7 @@ npm install --global ./dist-cli
 curlit run collection.json --bail
 ```
 
-The `dist-cli` package contains the CLI, its script worker, documentation, and license. It depends only on Undici at runtime. It can also be packed with `npm pack ./dist-cli` for installation on another machine. Rebuild before packing after changing source files.
+The `dist-cli` package contains the CLI, its script and schema workers, documentation, and license. Its runtime dependencies are Undici, Ajv, and ajv-formats. It can also be packed with `npm pack ./dist-cli` for installation on another machine. Rebuild before packing after changing source files.
 
 ## Collections and environments
 
@@ -60,6 +60,26 @@ UI exports contain file metadata, not file contents. To run a binary upload, add
 }
 ```
 
+### Response schemas
+
+Enable a request's **Schema** tab in the UI, save it, and export the collection. The CLI reads the same optional request field; the schema itself is stored as JSON text:
+
+```json
+{
+  "name": "Get user",
+  "method": "GET",
+  "url": "{{baseUrl}}/users/1",
+  "responseSchema": {
+    "enabled": true,
+    "schema": "{\"type\":\"object\",\"required\":[\"id\"],\"properties\":{\"id\":{\"type\":\"integer\"}}}"
+  }
+}
+```
+
+JSON Schema draft-07, local references, and standard formats are supported. Schemas are literal text: environment substitution and remote reference loading are not performed. A mismatch or non-JSON response fails the request with field paths such as `/id`; a malformed schema or worker timeout produces an errored request. Both exit with code 1 and trigger `--bail`. A malformed `responseSchema` configuration object is an input error (code 2). Disabled schemas are retained and skipped.
+
+Schema and script assertions both appear in JSON/JUnit reports. Passing scripts cannot override schema failures. Each schema has a 100,000-character limit and runs in a disposable worker with a two-second processing budget and a ten-second startup limit. At most 25 constraint errors are listed, followed by a count of omitted errors.
+
 ## Execution and exit codes
 
 | Option | Behavior |
@@ -71,7 +91,7 @@ UI exports contain file metadata, not file contents. To run a binary upload, add
 | `--report-json FILE` | Export a JSON report; parent directories are created |
 | `--report-junit FILE` | Export a JUnit XML report |
 
-Without a test script, HTTP 4xx/5xx responses fail the request. With a test script, assertions decide success, allowing tests that deliberately expect error responses. A thrown pre-request/test script, network error, or timeout always produces an errored result. Runs continue by default; `--bail` stops after the first unsuccessful result.
+Without a test script, HTTP 4xx/5xx responses fail the request even if a schema matches. With a test script, assertions decide success, allowing tests that deliberately expect error responses. Enabled response schemas must also pass. A thrown pre-request/test script, invalid schema, network error, or timeout always produces an errored result. Runs continue by default; `--bail` stops after the first unsuccessful result.
 
 | Exit code | Meaning |
 | --- | --- |
@@ -85,7 +105,7 @@ Interruption cancels the current network request or script, skips remaining requ
 
 ## Reports
 
-JSON includes the collection name, start time, request totals, durations, HTTP statuses, individual assertions, errors, and skip reasons. JUnit has one test case per request, with failed assertions in the failure detail and network/script problems represented as errors. Case names include their position so identically named requests remain distinct in CI. Counts in the summary and JUnit suite are request counts.
+JSON includes the collection name, start time, request totals, durations, HTTP statuses, individual assertions, errors, and skip reasons. JUnit has one test case per request, with failed assertions in the failure detail and network/script/schema configuration problems represented as errors. Case names include their position so identically named requests remain distinct in CI. Counts in the summary and JUnit suite are request counts.
 
 Reports omit request URLs, headers, credentials, response bodies, chain variables, and console logs. Request/test names and assertion error messages are included, so those fields should not embed secrets.
 
