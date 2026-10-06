@@ -58,6 +58,18 @@ describe('executeRequestWithScripts — happy path', () => {
 // ─── Test script outcomes ───────────────────────────────────────────────────
 
 describe('executeRequestWithScripts — test scripts', () => {
+  it.each([
+    'throw new Error("script failed");',
+    'curlit.test("passes", () => {}); throw new Error("script failed");',
+  ])('treats an unhandled test-script exception as an error: %s', async testScript => {
+    mockSend.mockResolvedValueOnce(okResponse());
+    const result = await executeRequestWithScripts(createDefaultRequest({ url: 'https://api.test/x', testScript }), { variables: {}, chainVars: {} });
+    expect(result.outcome).toBe('error');
+    expect(result.error).toBe('script failed');
+    expect(result.response.status).toBe(200);
+    expect(result.testResults.at(-1)).toMatchObject({ name: 'Test script', passed: false, error: 'script failed' });
+  });
+
   it('reports passed when all tests pass', async () => {
     mockSend.mockResolvedValueOnce(okResponse('{"ok":true}'));
     const result = await executeRequestWithScripts(

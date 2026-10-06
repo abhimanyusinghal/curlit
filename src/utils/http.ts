@@ -232,20 +232,22 @@ async function serializeFormDataEntries(
   return result;
 }
 
-export async function sendRequest(request: RequestConfig): Promise<ResponseData> {
+/** Build the same URL, auth, headers and body for every network transport. */
+export function prepareRequest(request: RequestConfig) {
   const url = buildUrl(request.url, request.params);
   const headers = buildHeaders(request.headers, request.auth);
   const body = buildBody(request);
 
-  if (request.body.type === 'graphql' && !headers['Content-Type']) {
+  const hasContentType = Object.keys(headers).some(key => key.toLowerCase() === 'content-type');
+  if (request.body.type === 'graphql' && !hasContentType) {
     headers['Content-Type'] = 'application/json';
-  } else if (request.body.type === 'json' && !headers['Content-Type']) {
+  } else if (request.body.type === 'json' && !hasContentType) {
     headers['Content-Type'] = 'application/json';
-  } else if (request.body.type === 'xml' && !headers['Content-Type']) {
+  } else if (request.body.type === 'xml' && !hasContentType) {
     headers['Content-Type'] = 'application/xml';
-  } else if (request.body.type === 'x-www-form-urlencoded' && !headers['Content-Type']) {
+  } else if (request.body.type === 'x-www-form-urlencoded' && !hasContentType) {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
-  } else if (request.body.type === 'binary' && !headers['Content-Type']) {
+  } else if (request.body.type === 'binary' && !hasContentType) {
     const file = getFile(request.id, BINARY_ENTRY_ID);
     headers['Content-Type'] = file?.type || 'application/octet-stream';
   }
@@ -258,6 +260,11 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
     finalUrl = urlObj.toString();
   }
 
+  return { url: finalUrl, headers, body };
+}
+
+export async function sendRequest(request: RequestConfig, signal?: AbortSignal): Promise<ResponseData> {
+  const { url: finalUrl, headers, body } = prepareRequest(request);
   const startTime = performance.now();
 
   // Build the structured proxy payload once — the browser path JSON-encodes it
@@ -311,6 +318,7 @@ export async function sendRequest(request: RequestConfig): Promise<ResponseData>
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal,
     });
     data = await response.json();
   }

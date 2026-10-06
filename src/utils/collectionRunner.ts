@@ -1,5 +1,5 @@
 import type { RequestConfig } from '../types';
-import { executeRequestWithScripts, type ExecuteResult } from './requestExecutor';
+import { executeRequestWithScripts, executionError, type ExecuteContext, type ExecuteResult } from './requestExecutor';
 
 export interface RunnerSummary {
   total: number;
@@ -29,6 +29,7 @@ export interface RunnerOptions {
   delayMs: number;
   signal: AbortSignal;
   onEvent: (event: RunnerEvent) => void;
+  execute?: (request: RequestConfig, context: ExecuteContext) => Promise<ExecuteResult>;
 }
 
 /**
@@ -81,10 +82,16 @@ export async function runCollection(options: RunnerOptions): Promise<void> {
     onEvent({ type: 'request-start', index: i });
     const reqStartedAt = Date.now();
 
-    const result = await executeRequestWithScripts(requests[i], {
-      variables,
-      chainVars: getChainVars(),
-    });
+    let result: ExecuteResult;
+    try {
+      result = await (options.execute ?? executeRequestWithScripts)(requests[i], {
+        variables,
+        chainVars: getChainVars(),
+        signal,
+      });
+    } catch (error) {
+      result = executionError(requests[i], error);
+    }
 
     const durationMs = Date.now() - reqStartedAt;
     summary.completed++;

@@ -58,20 +58,29 @@
 - [x] Optional cloud sync via GitHub Gist or a self-hosted backend
 - [x] Collection runner -- execute all requests in a collection sequentially
 
-### v1.4 -- Performance & Testing
+### v1.4 -- Desktop App (Released)
 
-- [ ] Team workspaces with shared collections
-- [ ] Real-time collaboration (conflict-free editing)
+- [x] Electron desktop app (no proxy server needed)
+
+### Next Release -- Automation & Reporting
+
+- [x] CLI tool (`curlit run collection.json`) for CI/CD pipelines -- environment overrides, timeouts, failure exit codes, and a GitHub Actions example
+- [x] Automated test reports -- JSON and JUnit XML export from the CLI and collection runner
+
+### Planned -- Performance & Testing
+
 - [ ] Performance benchmarking -- run a request N times, report avg/p95/p99
 - [ ] Response diffing -- compare two responses side-by-side
 - [ ] Mock server -- define mock responses for endpoints
 - [ ] Response schema validation (JSON Schema)
-- [ ] Automated test reports (exportable)
 
-### v1.5 -- Platform & Ecosystem
+### Planned -- Collaboration
 
-- [x] Electron desktop app (no proxy server needed)
-- [ ] CLI tool (`curlit run collection.json`) for CI/CD pipelines
+- [ ] Team workspaces with shared collections
+- [ ] Real-time collaboration (conflict-free editing)
+
+### Planned -- Platform & Ecosystem
+
 - [ ] VS Code extension
 - [ ] Plugin system for community extensions
 - [ ] Proxy authentication support (corporate proxies)
@@ -96,7 +105,7 @@
 | State Management | Zustand |
 | Code Editor | CodeMirror 6 (via @uiw/react-codemirror) |
 | Icons | Lucide React |
-| Build Tool | Vite 5 |
+| Build Tool | Vite 6 |
 | Proxy Server | Express.js |
 | Persistence | localStorage |
 

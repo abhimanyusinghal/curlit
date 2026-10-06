@@ -20,11 +20,17 @@
   },
   "type": "module",
   "main": "electron/main.cjs",
+  "bin": {
+    "curlit": "bin/curlit.cjs"
+  },
   "scripts": {
     "dev": "concurrently \"vite\" \"node server/proxy.js\"",
     "dev:frontend": "vite",
     "dev:server": "node server/proxy.js",
     "build": "tsc -b && vite build",
+    "build:cli": "tsc -p tsconfig.cli.json && node scripts/build-cli.mjs",
+    "cli": "node bin/curlit.cjs",
+    "test:cli": "npm run build:cli && vitest run cli/",
     "lint": "eslint .",
     "lint:electron": "eslint electron",
     "preview": "vite preview",

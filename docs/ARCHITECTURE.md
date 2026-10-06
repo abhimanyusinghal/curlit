@@ -2,7 +2,7 @@
 
 ## System Architecture
 
-CurlIt uses one React renderer with three network transports: an Express cloud/development proxy, the same proxy bundled as an optional local agent, and a hardened Electron main process for the desktop app. Browser code selects cloud or local proxy URLs; desktop code detects the preload bridge and uses IPC.
+CurlIt uses one React renderer with three network transports: an Express cloud/development proxy, the same proxy bundled as an optional local agent, and a hardened Electron main process for the desktop app. Browser code selects cloud or local proxy URLs; desktop code detects the preload bridge and uses IPC. A standalone Node CLI runs the shared collection executor with a direct HTTP transport.
 
 ### Frontend (React + TypeScript)
 
@@ -116,6 +116,18 @@ Production uses the `curlit://app` scheme, CSP, ASAR integrity, Electron fuses, 
   "time": 150
 }
 ```
+
+### CLI and Run Reports
+
+`cli/index.ts` loads and validates collection/environment JSON, applies explicit variable overrides, and calls the shared `runCollection()` loop. `executeRequestWithScripts()` accepts runtime adapters for sending requests and executing scripts. The browser/desktop adapters remain the default; the CLI adapter uses Node fetch with per-request Undici agents, cancellation, and timeouts.
+
+`prepareRequest()` supplies common URL, authentication, body, and header handling. CLI file attachments are loaded into the same in-memory file store from explicit paths relative to the collection JSON. No UI storage is needed. Each CLI run starts with fresh chain variables.
+
+The CLI runs the shared script engine inside a VM context in a worker, with JSON-only input/output, execution timeouts, and a heap limit. Host Node APIs and the process environment are not passed into the VM. This is execution containment for trusted collections, not a security boundary for hostile code. A worker is terminated after each script.
+
+`src/utils/runReport.ts` collects runner events into a versioned report shared by the CLI and the collection runner modal. JSON preserves assertion detail; JUnit produces one test case per request. Reports intentionally omit request payloads, credentials, response bodies, and script logs. CLI failures map to exit codes; UI results can be downloaded after completion or stopping.
+
+`npm run build:cli` type-checks and bundles the CLI and worker into an independently installable `dist-cli/` package. See [CLI.md](CLI.md).
 
 ### Persistence Layer
 

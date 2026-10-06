@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['coverage', 'dist', 'dist-agent', 'dist-desktop', 'playwright-report', 'test-results']),
+  globalIgnores(['coverage', 'dist', 'dist-agent', 'dist-cli', 'dist-desktop', 'playwright-report', 'test-results']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -28,7 +28,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['electron/**/*.cjs'],
+    files: ['electron/**/*.cjs', 'bin/**/*.cjs'],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,

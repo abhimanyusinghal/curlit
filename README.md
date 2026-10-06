@@ -11,7 +11,8 @@ A fast, modern, open-source API testing tool for engineers who build and validat
 
 - **Full HTTP Client** -- GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS with color-coded method badges
 - **Request Builder** -- Query params, headers, body (JSON, text, XML, multipart files, URL encoded, binary, GraphQL), SSL controls, and auth (Basic, Bearer, API key, OAuth 2.0)
-- **Automation** -- Pre-request and test scripts, assertions, chain variables, console output, and sequential collection runs
+- **Automation** -- Pre-request and test scripts, assertions, chain variables, console output, sequential collection runs, and JSON/JUnit report export
+- **CLI & CI/CD** -- Run exported collections headlessly with environment overrides, timeouts, failure exit codes, and test reports
 - **WebSockets** -- Connect with request headers/auth, send messages, inspect text/binary frames, and export message logs
 - **Response Viewer** -- Syntax-highlighted body (JSON, XML, HTML), headers table, cookies table, status/time/size metrics
 - **Collections** -- Organize, save, and reuse requests; import/export as JSON; import Postman collections (v2.1)
@@ -101,6 +102,9 @@ curlit/
 | `npm run dev:frontend` | Start Vite dev server only |
 | `npm run dev:server` | Start proxy server only |
 | `npm run build` | TypeScript check + production build |
+| `npm run build:cli` | Type-check and build the standalone CLI package |
+| `npm run cli -- run collection.json` | Run an exported collection from the terminal |
+| `npm run test:cli` | Build and test the CLI against local HTTP fixtures |
 | `npm run preview` | Preview production build |
 | `npm test` | Run all unit and integration tests |
 | `npm run test:watch` | Run tests in watch mode |
@@ -133,6 +137,24 @@ See [docs/DESKTOP.md](docs/DESKTOP.md) for build/release signing requirements, I
 
 The local agent is for the hosted browser UI: it runs the same proxy on `localhost:3001`, allowing requests to private networks that a cloud backend cannot reach. The Electron app does not need the agent because it performs network operations in its own main process. See the [user guide](docs/USER_GUIDE.md#browser-proxy-local-agent-and-desktop-app) for the operating modes and security boundary.
 
+## Command-line Collection Runs
+
+Run your exported collections in a terminal or CI pipeline with Node.js 22.12+:
+
+```bash
+npm run build:cli
+node bin/curlit.cjs run collection.json --env environment.json --bail --report-json reports/result.json --report-junit reports/result.xml
+
+# Optional: install the generated package for the curlit command
+npm install --global ./dist-cli
+curlit --help
+
+# Run a self-contained local API test and generate both reports
+node examples/ci/run.mjs
+```
+
+The CLI shares request construction, scripting, assertions, chaining, and reports with the UI. It sends requests directly, without requiring a proxy or desktop app. Failed requests return a nonzero exit code. See [docs/CLI.md](docs/CLI.md) for environment overrides, file attachments, exit codes, and GitHub Actions setup.
+
 ## Testing
 
 CurlIt has coverage across unit, store, component, server, Electron desktop, and end-to-end layers:
@@ -143,6 +165,7 @@ CurlIt has coverage across unit, store, component, server, Electron desktop, and
 | Component | Vitest + React Testing Library | React UI behavior with real store state |
 | Server | Vitest + Supertest | Express proxy request forwarding, error handling, and body types |
 | Electron desktop | Vitest | IPC validation, navigation and preload security, WebSocket lifecycle, and packaged-app configuration |
+| CLI | Vitest + real child processes | Collection exports, direct HTTP, GraphQL, scripts, file uploads, timeouts, reports, and exit codes |
 | E2E | Playwright | Full browser workflows: requests, collections, cURL import/export, environments, and keyboard shortcuts |
 
 ```bash

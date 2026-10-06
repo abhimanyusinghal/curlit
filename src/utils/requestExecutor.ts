@@ -1,19 +1,29 @@
 import type { RequestConfig, ResponseData, TestResult, ScriptConsoleEntry } from '../types';
 import { sendRequest, resolveRequestVariables, buildHeaders, buildBody } from './http';
-import { runPreRequestScript, runTestScript } from './scriptEngine';
+import { runPreRequestScript, runTestScript, type PreRequestResult, type TestScriptResult } from './scriptEngine';
 
 export interface ExecuteContext {
   /** Environment variables available via {{ }} substitution. */
   variables: Record<string, string>;
   /** Chain variables snapshot (updated by prior test scripts). */
   chainVars: Record<string, string>;
+  signal?: AbortSignal;
 }
+
+/** Runtime adapters keep collection semantics shared across the UI and CLI. */
+export interface ExecutionRuntime {
+  sendRequest: (request: RequestConfig, signal?: AbortSignal) => Promise<ResponseData>;
+  runPreRequestScript: (...args: Parameters<typeof runPreRequestScript>) => PreRequestResult | Promise<PreRequestResult>;
+  runTestScript: (...args: Parameters<typeof runTestScript>) => TestScriptResult | Promise<TestScriptResult>;
+}
+
+const browserRuntime: ExecutionRuntime = { sendRequest, runPreRequestScript, runTestScript };
 
 export type ExecuteOutcome = 'passed' | 'failed' | 'error';
 
 export interface ExecuteResult {
   resolvedRequest: RequestConfig;
-  /** Always present; status 0 + statusText: 'Error' | 'Script Error' on failure paths. */
+  /** Always present; transport/pre-request failures use status 0. */
   response: ResponseData;
   testResults: TestResult[];
   chainVarUpdates: Record<string, string>;
@@ -24,6 +34,15 @@ export interface ExecuteResult {
 
 function errorResponse(statusText: string, body: string): ResponseData {
   return { status: 0, statusText, headers: {}, body, size: 0, time: 0, cookies: [] };
+}
+
+export function executionError(request: RequestConfig, error: unknown): ExecuteResult {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    resolvedRequest: request,
+    response: errorResponse('Error', message),
+    testResults: [], chainVarUpdates: {}, logs: [], error: message, outcome: 'error',
+  };
 }
 
 /**
@@ -38,6 +57,23 @@ function errorResponse(statusText: string, body: string): ResponseData {
 export async function executeRequestWithScripts(
   request: RequestConfig,
   ctx: ExecuteContext,
+  runtime: ExecutionRuntime = browserRuntime,
+): Promise<ExecuteResult> {
+  try {
+    ctx.signal?.throwIfAborted();
+    if (request.protocol === 'websocket') {
+      throw new Error('Collection runs support HTTP and GraphQL requests; WebSocket sessions must be run interactively.');
+    }
+    return await execute(request, ctx, runtime);
+  } catch (error) {
+    return executionError(request, error);
+  }
+}
+
+async function execute(
+  request: RequestConfig,
+  ctx: ExecuteContext,
+  runtime: ExecutionRuntime,
 ): Promise<ExecuteResult> {
   const logs: ScriptConsoleEntry[] = [];
   const chainVarUpdates: Record<string, string> = {};
@@ -50,7 +86,7 @@ export async function executeRequestWithScripts(
     const body = buildBody(resolved);
     const bodyStr = body === null ? null : typeof body === 'string' ? body : null;
 
-    const preResult = runPreRequestScript(
+    const preResult = await runtime.runPreRequestScript(
       request.preRequestScript,
       resolved,
       headers,
@@ -133,7 +169,8 @@ export async function executeRequestWithScripts(
   // --- Send ---
   let response: ResponseData;
   try {
-    response = await sendRequest(resolved);
+    ctx.signal?.throwIfAborted();
+    response = await runtime.sendRequest(resolved, ctx.signal);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to send request';
     const isProxyDown = message === 'Failed to fetch' || message.includes('NetworkError');
@@ -176,7 +213,7 @@ export async function executeRequestWithScripts(
   if (hasTestScript) {
     // Merge in any chain-var updates from pre-request so tests see them.
     const chainForTests = { ...ctx.chainVars, ...chainVarUpdates };
-    const testResult = runTestScript(request.testScript!, resolved, response, chainForTests);
+    const testResult = await runtime.runTestScript(request.testScript!, resolved, response, chainForTests);
     logs.push(...testResult.logs);
     testResults = testResult.tests;
     Object.assign(chainVarUpdates, testResult.chain);
@@ -187,6 +224,13 @@ export async function executeRequestWithScripts(
         args: [`Test script error: ${testResult.error}`],
         timestamp: Date.now(),
       });
+      // A script can throw before (or after) registering assertions. It must
+      // never turn an incomplete test run into a passing CI result.
+      testResults.push({ name: 'Test script', passed: false, error: testResult.error });
+      return {
+        resolvedRequest: resolved, response, testResults, chainVarUpdates, logs,
+        error: testResult.error, outcome: 'error',
+      };
     }
   }
 
