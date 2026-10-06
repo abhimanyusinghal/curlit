@@ -10,12 +10,14 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  Download,
 } from 'lucide-react';
 import { useAppStore } from '../store';
 import { MethodBadge } from './MethodBadge';
 import type { Collection } from '../types';
 import { runCollection, type RunnerEvent, type RunnerSummary } from '../utils/collectionRunner';
 import type { ExecuteResult } from '../utils/requestExecutor';
+import { createRunReporter, downloadRunReport, type RunReport } from '../utils/runReport';
 
 interface Props {
   open: boolean;
@@ -41,25 +43,34 @@ export function CollectionRunnerModal({ open, onClose, collection }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [rows, setRows] = useState<RowState[]>([]);
   const [summary, setSummary] = useState<RunnerSummary | null>(null);
+  const [report, setReport] = useState<RunReport | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
 
   // Reset when opened for a different collection
   useEffect(() => {
     if (!open) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
     // This effect intentionally resets transient form/run state at the modal boundary.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setEnvId(activeEnvironmentId);
     setPhase('idle');
     setRows(collection ? collection.requests.map(() => ({ status: 'pending' })) : []);
     setSummary(null);
+    setReport(null);
     setExpanded(new Set());
   }, [open, collection, activeEnvironmentId]);
 
   // Abort any in-flight run when the modal closes
   useEffect(() => {
-    if (!open) abortRef.current?.abort();
+    if (!open) {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    }
   }, [open]);
+
+  useEffect(() => () => { abortRef.current?.abort(); }, []);
 
   const resolvedEnv = useMemo(() => environments.find(e => e.id === envId) ?? null, [environments, envId]);
 
@@ -77,6 +88,7 @@ export function CollectionRunnerModal({ open, onClose, collection }: Props) {
     abortRef.current = controller;
     setPhase('running');
     setSummary(null);
+    setReport(null);
     setRows(collection.requests.map(() => ({ status: 'pending' })));
 
     const envVars: Record<string, string> = {};
@@ -86,6 +98,7 @@ export function CollectionRunnerModal({ open, onClose, collection }: Props) {
         envVars[v.key] = v.value;
       });
 
+    const reporter = createRunReporter(collection);
     await runCollection({
       requests: collection.requests,
       variables: envVars,
@@ -95,6 +108,8 @@ export function CollectionRunnerModal({ open, onClose, collection }: Props) {
       delayMs,
       signal: controller.signal,
       onEvent: (event: RunnerEvent) => {
+        if (abortRef.current !== controller) return;
+        reporter.record(event);
         if (event.type === 'request-start') {
           setRows(prev => {
             const next = [...prev];
@@ -115,6 +130,7 @@ export function CollectionRunnerModal({ open, onClose, collection }: Props) {
           });
         } else if (event.type === 'done') {
           setSummary(event.summary);
+          setReport(reporter.snapshot());
           setPhase('finished');
         }
       },
@@ -216,6 +232,23 @@ export function CollectionRunnerModal({ open, onClose, collection }: Props) {
               </div>
             )}
           </div>
+
+          {report && phase === 'finished' && (
+            <div className="flex items-center justify-end gap-2 mb-3">
+              <span className="text-xs text-dark-400">Export report</span>
+              {(['json', 'junit'] as const).map(format => (
+                <button
+                  key={format}
+                  onClick={() => downloadRunReport(report, format)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-dark-200 bg-dark-700 hover:bg-dark-600 rounded cursor-pointer"
+                  aria-label={`Export ${format === 'json' ? 'JSON' : 'JUnit'} report`}
+                >
+                  <Download size={12} />
+                  {format === 'json' ? 'JSON' : 'JUnit XML'}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Rows */}
           {total === 0 ? (

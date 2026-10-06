@@ -36,6 +36,8 @@ export interface FormDataEntry extends KeyValuePair {
   fileName?: string;
   fileSize?: number;
   fileType?: string;
+  /** CLI attachment path, relative to the collection JSON. */
+  filePath?: string;
 }
 
 export type BodyType = 'none' | 'json' | 'text' | 'xml' | 'form-data' | 'x-www-form-urlencoded' | 'binary' | 'graphql';
@@ -93,6 +95,7 @@ export interface RequestConfig {
       fileName: string;
       fileSize: number;
       fileType: string;
+      filePath?: string;
     };
     graphql?: {
       query: string;

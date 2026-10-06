@@ -155,11 +155,15 @@ Execute every request in a collection sequentially and see a pass/fail summary -
 
 **What counts as a failure:**
 
-- **passed** -- request completed and either had no tests or all tests passed
-- **failed** -- one or more assertions in `testScript` failed (note: a 4xx/5xx status on its own is *not* a failure -- your tests are authoritative)
-- **errored** -- the network call or pre-request script threw before a response could be collected
+- **passed** -- all assertions passed, or the request returned a status below 400 without a test script
+- **failed** -- an assertion failed, or the request returned HTTP 4xx/5xx without a test script; a test script can explicitly accept an expected error response
+- **errored** -- the network call or a pre-request/test script threw; unhandled script errors fail the run even when earlier assertions passed
 
-Chain variables set by `testScript` during the run are visible to later requests in the same run, so setup/teardown chains (login -> call -> cleanup) work naturally. Click **Stop** to abort in-flight -- any remaining requests are marked **skipped**.
+Chain variables set by `testScript` during the run are visible to later requests in the same run, so setup/teardown chains (login -> call -> cleanup) work naturally. Click **Stop** to skip remaining requests. The browser also cancels its in-flight proxy fetch; an already-running desktop IPC request finishes before stopping.
+
+After a run finishes or is stopped, use **Export report → JSON / JUnit XML** to download its results. Reports include request outcomes, timings, assertions, errors, and skipped requests. Request credentials, response bodies, and script console logs are omitted. Starting another run clears the previous report.
+
+To run an exported collection in CI, build the CLI with `npm run build:cli`, then use `node bin/curlit.cjs run collection.json --report-junit reports/result.xml`. See [CLI guide](CLI.md) for environment files, variable overrides, timeouts, and pipeline examples.
 
 ---
 

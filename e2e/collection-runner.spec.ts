@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 test.describe('Collection Runner', () => {
   test.beforeEach(async ({ page }) => {
@@ -80,6 +81,22 @@ test.describe('Collection Runner', () => {
 
     // Start Run button becomes "Run Again"
     await expect(page.getByRole('button', { name: /Run Again/ })).toBeVisible();
+
+    const jsonDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export JSON report', exact: true }).click();
+    const json = await jsonDownload;
+    expect(json.suggestedFilename()).toBe('Runner-Fixture-report.json');
+    const report = JSON.parse(await readFile((await json.path())!, 'utf8'));
+    expect(report.summary).toMatchObject({ total: 2, passed: 2, failed: 0, errored: 0, skipped: 0 });
+    expect(report.requests.map((request: { name: string }) => request.name)).toEqual(['Alpha', 'Bravo']);
+
+    const xmlDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export JUnit report', exact: true }).click();
+    const xml = await xmlDownload;
+    expect(await readFile((await xml.path())!, 'utf8')).toContain('tests="2" failures="0" errors="0" skipped="0"');
+
+    await page.getByRole('button', { name: 'Run Again', exact: true }).click();
+    await expect(page.getByText(/Completed 2\/2 in/)).toBeVisible();
   });
 
   test('disables Run collection for an empty collection', async ({ page }) => {
