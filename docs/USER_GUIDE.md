@@ -93,6 +93,33 @@ The **Scripts** tab provides JavaScript editors. Pre-request scripts run before 
 
 **OpenAPI** accepts JSON or YAML OpenAPI 3.x and Swagger 2.0 documents, previews discovered operations, and imports selected operations as a collection. Collection import also accepts CurlIt JSON and Postman Collection v2.1, including nested folders (flattened), auth, headers, and supported body modes. Imported executable scripts are not trusted.
 
+### Response Schema Validation
+
+1. Open the request's **Schema** tab and paste a JSON Schema, or choose **Insert example**.
+2. Enable **Validate response against schema** and send the request.
+3. Open the response **Tests** tab to see the result. Failures identify JSON Pointer paths such as `/users/0/email` and explain the failed constraint.
+4. Press **Ctrl+S** to save the schema with the request. Disabling validation keeps the schema text for later use.
+
+For a response such as `{"id": 42, "email": "user@example.com"}`:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["id", "email"],
+  "properties": {
+    "id": { "type": "integer", "minimum": 1 },
+    "email": { "type": "string", "format": "email" }
+  }
+}
+```
+
+Validation supports JSON Schema draft-07, including arrays, composition, boolean schemas, standard formats, and references within the same schema. It does not fetch remote references, substitute environment variables into schemas, or convert response values to other types. OpenAPI imports do not populate response schemas automatically.
+
+An incompatible response, including an empty or non-JSON body, fails the request. Invalid or empty enabled schemas and validation timeouts produce errors. Schema results appear alongside script assertions: a passing script cannot override a schema failure. Without a test script, HTTP 4xx/5xx responses still fail even when their body matches the schema.
+
+Schemas are preserved in collections, backups, sync, and shared request links. The collection runner and [CLI](CLI.md) include their assertions in JSON and JUnit reports. Each schema is limited to 100,000 characters; validation runs in a separate worker with a two-second processing budget and a ten-second startup limit. Results show up to 25 constraint errors plus a count of any omitted errors.
+
 ---
 
 ## Working with Tabs

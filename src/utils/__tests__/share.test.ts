@@ -28,11 +28,12 @@ function requestWithEverything(): RequestConfig {
 
 describe('encodeRequest / decodePayload', () => {
   it('round-trips a request', () => {
-    const req = createDefaultRequest({ name: 'Simple', url: 'https://example.com' });
+    const req = createDefaultRequest({ name: 'Simple', url: 'https://example.com', responseSchema: { enabled: true, schema: '{"type":"object"}' } });
     const encoded = encodeRequest(req, { includeSecrets: false });
     const payload = decodePayload(encoded);
     expect(payload.v).toBe(SHARE_VERSION);
     expect(payload.request.url).toBe('https://example.com');
+    expect(sharedRequestToTabSeed(payload).responseSchema).toEqual(req.responseSchema);
   });
 
   it('handles unicode in request body', () => {

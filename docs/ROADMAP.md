@@ -66,13 +66,13 @@
 
 - [x] CLI tool (`curlit run collection.json`) for CI/CD pipelines -- environment overrides, timeouts, failure exit codes, and a GitHub Actions example
 - [x] Automated test reports -- JSON and JUnit XML export from the CLI and collection runner
+- [x] Response schema validation -- per-request JSON Schema draft-07 checks in browser, desktop, and CLI, with field paths in test results and reports
 
 ### Planned -- Performance & Testing
 
 - [ ] Performance benchmarking -- run a request N times, report avg/p95/p99
 - [ ] Response diffing -- compare two responses side-by-side
 - [ ] Mock server -- define mock responses for endpoints
-- [ ] Response schema validation (JSON Schema)
 
 ### Planned -- Collaboration
 

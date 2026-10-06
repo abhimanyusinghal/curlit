@@ -16,7 +16,7 @@ import { useAppStore } from '../store';
 import { MethodBadge } from './MethodBadge';
 import type { Collection } from '../types';
 import { runCollection, type RunnerEvent, type RunnerSummary } from '../utils/collectionRunner';
-import type { ExecuteResult } from '../utils/requestExecutor';
+import { executeRequestWithScripts, type ExecuteResult } from '../utils/requestExecutor';
 import { createRunReporter, downloadRunReport, type RunReport } from '../utils/runReport';
 
 interface Props {
@@ -100,6 +100,7 @@ export function CollectionRunnerModal({ open, onClose, collection }: Props) {
 
     const reporter = createRunReporter(collection);
     await runCollection({
+      execute: executeRequestWithScripts,
       requests: collection.requests,
       variables: envVars,
       getChainVars: () => useAppStore.getState().chainVariables,

@@ -5,6 +5,8 @@ import packageJson from './package.json'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Worker-only dependencies otherwise trigger a full reload on first validation.
+  optimizeDeps: { include: ['ajv', 'ajv-formats'] },
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
   },

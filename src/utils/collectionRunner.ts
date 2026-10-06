@@ -1,5 +1,5 @@
 import type { RequestConfig } from '../types';
-import { executeRequestWithScripts, executionError, type ExecuteContext, type ExecuteResult } from './requestExecutor';
+import { executionError, type ExecuteContext, type ExecuteResult } from './requestExecutorCore';
 
 export interface RunnerSummary {
   total: number;
@@ -29,7 +29,7 @@ export interface RunnerOptions {
   delayMs: number;
   signal: AbortSignal;
   onEvent: (event: RunnerEvent) => void;
-  execute?: (request: RequestConfig, context: ExecuteContext) => Promise<ExecuteResult>;
+  execute: (request: RequestConfig, context: ExecuteContext) => Promise<ExecuteResult>;
 }
 
 /**
@@ -84,7 +84,7 @@ export async function runCollection(options: RunnerOptions): Promise<void> {
 
     let result: ExecuteResult;
     try {
-      result = await (options.execute ?? executeRequestWithScripts)(requests[i], {
+      result = await options.execute(requests[i], {
         variables,
         chainVars: getChainVars(),
         signal,

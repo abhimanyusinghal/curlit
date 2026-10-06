@@ -57,4 +57,17 @@ describe('RequestPanel', () => {
     expect(screen.getByText('Bearer Token')).toBeInTheDocument();
     expect(screen.getByText('API Key')).toBeInTheDocument();
   });
+
+  it('lets users replace malformed imported schema settings without crashing', () => {
+    const request = getActiveRequest();
+    useAppStore.getState().updateRequest(request.id, { responseSchema: JSON.parse('{"enabled":true,"schema":{}}') });
+    const { rerender } = render(<RequestPanel request={getActiveRequest()} />);
+    fireEvent.click(screen.getByText('Schema'));
+    expect(screen.getByRole('alert')).toHaveTextContent('Saved schema settings are invalid');
+    fireEvent.click(screen.getByText('Insert example'));
+    rerender(<RequestPanel request={getActiveRequest()} />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(getActiveRequest().responseSchema?.enabled).toBe(false);
+    expect(JSON.parse(getActiveRequest().responseSchema!.schema)).toMatchObject({ type: 'object', required: ['id'] });
+  });
 });

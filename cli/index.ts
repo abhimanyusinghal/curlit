@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { version } from '../package.json';
 import { runCollection } from '../src/utils/collectionRunner';
-import { executeRequestWithScripts } from '../src/utils/requestExecutor';
+import { executeRequestWithScripts } from '../src/utils/requestExecutorCore';
 import { removeFilesForRequest } from '../src/utils/fileStore';
 import { createRunReporter, serializeRunReport } from '../src/utils/runReport';
 import { attachFiles, parseCollection, parseEnvironment, readJson } from './input';
