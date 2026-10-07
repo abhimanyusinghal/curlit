@@ -33,9 +33,10 @@ function stripScriptsFromCollection(collection: Collection): Collection {
 
 interface SidebarProps {
   onRunCollection?: (collectionId: string) => void;
+  onBenchmarkCollection?: (collectionId: string) => void;
 }
 
-export function Sidebar({ onRunCollection }: SidebarProps = {}) {
+export function Sidebar({ onRunCollection, onBenchmarkCollection }: SidebarProps = {}) {
   const sidebarView = useAppStore(s => s.sidebarView);
   const setSidebarView = useAppStore(s => s.setSidebarView);
 
@@ -68,7 +69,7 @@ export function Sidebar({ onRunCollection }: SidebarProps = {}) {
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        {sidebarView === 'collections' && <CollectionsPanel onRunCollection={onRunCollection} />}
+        {sidebarView === 'collections' && <CollectionsPanel onRunCollection={onRunCollection} onBenchmarkCollection={onBenchmarkCollection} />}
         {sidebarView === 'history' && <HistoryPanel />}
         {sidebarView === 'environments' && <EnvironmentsPanel />}
       </div>
@@ -76,7 +77,7 @@ export function Sidebar({ onRunCollection }: SidebarProps = {}) {
   );
 }
 
-function CollectionsPanel({ onRunCollection }: { onRunCollection?: (id: string) => void }) {
+function CollectionsPanel({ onRunCollection, onBenchmarkCollection }: SidebarProps) {
   const collections = useAppStore(s => s.collections);
   const createCollection = useAppStore(s => s.createCollection);
   const [showImport, setShowImport] = useState(false);
@@ -193,7 +194,7 @@ function CollectionsPanel({ onRunCollection }: { onRunCollection?: (id: string) 
           No collections yet. Click + to create one.
         </div>
       ) : (
-        collections.map(c => <CollectionItem key={c.id} collection={c} onRun={onRunCollection} />)
+        collections.map(c => <CollectionItem key={c.id} collection={c} onRun={onRunCollection} onBenchmark={onBenchmarkCollection} />)
       )}
 
       <TextPromptModal
@@ -212,7 +213,7 @@ function CollectionsPanel({ onRunCollection }: { onRunCollection?: (id: string) 
   );
 }
 
-function CollectionItem({ collection, onRun }: { collection: Collection; onRun?: (id: string) => void }) {
+function CollectionItem({ collection, onRun, onBenchmark }: { collection: Collection; onRun?: (id: string) => void; onBenchmark?: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showRename, setShowRename] = useState(false);
@@ -296,6 +297,7 @@ function CollectionItem({ collection, onRun }: { collection: Collection; onRun?:
               >
                 Run collection
               </button>
+              <button onClick={() => { onBenchmark?.(collection.id); setShowMenu(false); }} disabled={!collection.requests.length || collection.requests.some(request => request.protocol === 'websocket')} className="w-full text-left px-3 py-1.5 text-xs text-dark-200 hover:bg-dark-600 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">Benchmark collection</button>
               <button
                 onClick={() => {
                   if (confirm('Delete this collection?')) deleteCollection(collection.id);

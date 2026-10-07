@@ -122,6 +122,20 @@ Schemas are preserved in collections, backups, sync, and shared request links. T
 
 ---
 
+## Performance Benchmarks
+
+Click the **Benchmark request** gauge button beside Send, or choose **Benchmark collection** from a collection's menu. Select an environment, measured iterations, optional warm-up iterations, delay, and request timeout. Click **Start benchmark**; **Stop benchmark** cancels the active HTTP request and leaves a partial report available to export.
+
+Each iteration sends all selected requests sequentially. Chain variables reset each iteration, and existing scripts and response schemas run on every request. Warm-up results are excluded from measured latency and failure rate, but failed warm-up checks still fail the benchmark. **Stop on first failure** also applies during warm-up. The combined warm-up and measured workload is limited to 10,000 requests.
+
+The results table shows HTTP sample count, average, median, p95/p99, min/max, and failure rate for each request. HTTP latency covers the target request through complete body download; scripts and schema validation contribute only to total execution time. Network failures have no latency sample, and failed assertions still count toward the failure rate. Use the updated proxy/local agent for target HTTP timing. Compare runs using the same transport and machine: browser measurements originate at the selected proxy; desktop and CLI measurements originate locally. Connection setup is included when required by that transport.
+
+Enter comma-separated thresholds such as `p95<500, failureRate<=0` to set a latency limit and require zero failures. Thresholds apply to every request individually. Latency metrics use milliseconds and failureRate uses percent; `<` and `<=` are supported. Incomplete runs and missing timings cannot satisfy a latency threshold. Percentiles use linear interpolation and are most useful with enough measured samples; warm-up does not increase the sample count.
+
+Export **JSON** for detailed statistics and assertions or **JUnit XML** for CI results. Large result lists show the first 100 entries in the dialog; exports contain every result. **Run benchmark again** clears previous results. The [CLI](CLI.md#performance-benchmarks) provides the same benchmark engine with failure exit codes.
+
+---
+
 ## Working with Tabs
 
 - Click **+** or press **Ctrl+N** to open a new tab

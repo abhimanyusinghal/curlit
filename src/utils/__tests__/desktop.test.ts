@@ -101,6 +101,24 @@ describe('Electron renderer bridge', () => {
     expect(() => desktopApi()).toThrow('Desktop API unavailable');
   });
 
+  it('cancels only its own HTTP invocation and rejects promptly', async () => {
+    bridge.api.cancelHttp = vi.fn(async () => true);
+    bridge.http.mockImplementation(() => new Promise(() => {}));
+    const controller = new AbortController();
+    const pending = sendRequest(createDefaultRequest({ url: 'https://example.test' }), controller.signal);
+    const assertion = expect(pending).rejects.toThrow();
+    controller.abort();
+    await assertion;
+    expect(bridge.api.cancelHttp).toHaveBeenCalledWith(bridge.http.mock.calls[0][0].requestId);
+  });
+
+  it('preserves explicit HTTP timing without treating legacy transport timing as a benchmark sample', async () => {
+    bridge.http.mockResolvedValueOnce(httpResponse({ time: 100, httpTimeMs: 42.25 })).mockResolvedValueOnce(httpResponse({ time: 100 }));
+    const request = createDefaultRequest({ url: 'https://example.test' });
+    expect((await sendRequest(request)).httpTimeMs).toBe(42.25);
+    expect((await sendRequest(request)).httpTimeMs).toBeUndefined();
+  });
+
   it('sends HTTP requests through IPC instead of the browser proxy', async () => {
     bridge.http.mockResolvedValueOnce(httpResponse({
       status: 201,

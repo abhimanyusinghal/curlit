@@ -417,7 +417,9 @@ async function handleValidatedHttpRequest(request, externalSignal) {
       fetchOptions.dispatcher = dispatcher;
     }
 
+    const httpStartedAt = performance.now();
     const { response, text } = await fetchTextWithLimits(request.url, fetchOptions, externalSignal);
+    const httpTimeMs = performance.now() - httpStartedAt;
     const headers = Object.create(null);
     response.headers.forEach((value, key) => {
       headers[key] = value;
@@ -436,7 +438,8 @@ async function handleValidatedHttpRequest(request, externalSignal) {
       headers,
       body,
       cookies: extractCookies(response),
-      time: Date.now() - startedAt,
+      time: httpTimeMs,
+      httpTimeMs,
     };
   } catch (error) {
     return {
@@ -793,7 +796,7 @@ function closeAllWebSockets() {
   }
 }
 
-function withNetworkRequest(webContents, operation) {
+function withNetworkRequest(webContents, operation, requestId) {
   const ownerId = webContentsId(webContents);
   if (!ownerId) return Promise.reject(validationError('Renderer is no longer available'));
 
@@ -807,6 +810,10 @@ function withNetworkRequest(webContents, operation) {
   }
 
   const controller = new AbortController();
+  if (requestId && [...controllers].some(active => active.requestId === requestId)) {
+    return Promise.reject(validationError('HTTP request id is already active'));
+  }
+  controller.requestId = requestId;
   controllers.add(controller);
   return Promise.resolve(operation(controller.signal)).finally(() => {
     controllers.delete(controller);
@@ -858,13 +865,22 @@ function registerIpcHandlers(ipc, options = {}) {
     // rejected at the IPC boundary instead of being represented as a network
     // failure in the UI.
     const request = validateHttpPayload(payload);
+    const requestId = payload.requestId === undefined ? undefined : validateConnectionId(payload.requestId);
     try {
-      return await withNetworkRequest(event.sender, (signal) => handleValidatedHttpRequest(request, signal));
+      return await withNetworkRequest(event.sender, (signal) => handleValidatedHttpRequest(request, signal), requestId);
     } catch (error) {
       return {
         status: 0, statusText: 'Error', headers: {}, body: formatNetworkError(error), cookies: [], time: 0,
       };
     }
+  });
+  ipc.handle('curlit:http-cancel', (event, requestId) => {
+    assertTrustedIpcSender(event);
+    const id = validateConnectionId(requestId);
+    const controllers = activeNetworkRequests.get(webContentsId(event.sender));
+    const controller = controllers && [...controllers].find(active => active.requestId === id);
+    if (controller) controller.abort(new Error('Request cancelled'));
+    return !!controller;
   });
   ipc.handle('curlit:oauth-token', async (event, payload) => {
     assertTrustedIpcSender(event);

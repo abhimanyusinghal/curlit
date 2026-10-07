@@ -6,6 +6,8 @@ test.describe('Electron desktop runtime', () => {
   let app: ElectronApplication;
   let api: Server;
   let apiUrl: string;
+  let hangStarted = false;
+  let hangClosed = false;
 
   test.beforeAll(async () => {
     api = createServer((request, response) => {
@@ -13,6 +15,12 @@ test.describe('Electron desktop runtime', () => {
         'content-type': 'application/json',
         'x-curlit-method': request.method ?? '',
       });
+      if (request.url === '/hang') {
+        hangStarted = true;
+        response.on('close', () => { hangClosed = true; });
+        response.write('partial');
+        return;
+      }
       response.end(JSON.stringify({ source: 'electron-ipc', method: request.method }));
     });
     await new Promise<void>((resolve, reject) => {
@@ -34,6 +42,7 @@ test.describe('Electron desktop runtime', () => {
 
   test.afterAll(async () => {
     await app?.close();
+    api?.closeAllConnections();
     await new Promise<void>(resolve => api?.close(() => resolve()));
   });
 
@@ -62,5 +71,28 @@ test.describe('Electron desktop runtime', () => {
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.getByText('Response schema: /source', { exact: true })).toBeVisible();
     await expect(page.getByText('must be integer', { exact: true })).toBeVisible();
+  });
+
+  test('benchmarks real HTTP latency and cancels an active desktop request', async () => {
+    const page = await app.firstWindow();
+    await page.reload();
+    await page.getByPlaceholder('Enter URL or paste cURL command...').fill(apiUrl);
+    await page.getByRole('button', { name: 'Benchmark request' }).click();
+    const dialog = page.getByRole('dialog', { name: /Benchmark/ });
+    await dialog.getByLabel('Iterations', { exact: true }).fill('2');
+    await dialog.getByLabel('Warm-up iterations').fill('1');
+    await dialog.getByLabel('Thresholds (optional)').fill('p95<60000, failureRate<=0');
+    await dialog.getByRole('button', { name: 'Start benchmark' }).click();
+    await expect(dialog.getByRole('status')).toContainText('Benchmark passed');
+    await expect(dialog.getByRole('status')).toContainText('2/2 measured requests');
+    await dialog.getByRole('button', { name: 'Close benchmark' }).click();
+
+    await page.getByPlaceholder('Enter URL or paste cURL command...').fill(apiUrl.replace('/verify', '/hang'));
+    await page.getByRole('button', { name: 'Benchmark request' }).click();
+    await dialog.getByRole('button', { name: 'Start benchmark' }).click();
+    await expect.poll(() => hangStarted).toBe(true);
+    await dialog.getByRole('button', { name: 'Stop benchmark' }).click();
+    await expect(dialog.getByRole('status')).toContainText('Benchmark aborted');
+    await expect.poll(() => hangClosed).toBe(true);
   });
 });

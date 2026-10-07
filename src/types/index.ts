@@ -136,6 +136,8 @@ export interface ResponseData {
   body: string;
   size: number;
   time: number;
+  /** Target HTTP round trip through body download, excluding scripts/validation. */
+  httpTimeMs?: number;
   cookies: { name: string; value: string; domain?: string; path?: string }[];
 }
 

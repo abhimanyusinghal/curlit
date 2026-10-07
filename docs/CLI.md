@@ -103,6 +103,34 @@ Without a test script, HTTP 4xx/5xx responses fail the request even if a schema 
 
 Interruption cancels the current network request or script, skips remaining requests, and writes any requested partial reports. Scripts use the shared CurlIt assertion engine in a separate worker and VM context, with time and heap limits. Node globals and the process environment are not exposed to scripts. These mechanisms are not a security boundary for hostile JavaScript; run collections from sources you trust.
 
+## Performance benchmarks
+
+Use `bench` to repeat a collection or select one request by name or ID:
+
+```sh
+curlit bench collection.json --iterations 100 --warmup 5 --env environment.json --threshold "p95<500" --threshold "failureRate<=0" --report-json reports/benchmark.json --report-junit reports/benchmark.xml
+curlit bench collection.json --request "Get user" --iterations 20
+```
+
+Requests run sequentially, in collection order, once per iteration. Environment overrides, attachments, schemas, scripts, `--bail`, delay, request/script timeouts, and interruption work as in `run`. Chain variables start empty each iteration and flow between requests within that iteration. Warm-up executes the same requests and checks but is excluded from latency statistics and the measured failure rate. Warm-up failures still fail the benchmark and trigger `--bail` when enabled.
+
+| Benchmark option | Behavior |
+| --- | --- |
+| `--iterations N` | Measured iterations, default 10, range 1–10000 |
+| `--warmup N` | Warm-up iterations, default 0, range 0–1000 |
+| `--request NAME_OR_ID` | Select exactly one request in the selected collection |
+| `--threshold EXPRESSION` | Repeatable upper limits, applied separately to every request |
+
+At most 10,000 requests may be scheduled, including warm-up. These options require `bench`. Thresholds accept `<` or `<=`, with `avg`, `min`, `max`, `median`, `p95`, or `p99` in milliseconds, and `failureRate` in percent. For example, `failureRate<=1` means at most 1%, not 100%. Up to 20 thresholds are supported. Every request must satisfy its own thresholds; a fast endpoint cannot mask a slow one. Missing measurements or incomplete measured iterations cannot pass a latency threshold.
+
+The CLI prints average, median, p95, p99, min/max, sample count, and failure rate for each request. Latency measures the target HTTP round trip through complete body download, excluding script workers, schema validation, and response formatting. Total execution duration includes that work and configured delays. Timed-out requests and pre-request/network failures have no HTTP latency sample; HTTP error responses and failed schema/script checks retain their actual HTTP time. Failure rate counts failed and errored measured executions. Threshold comparisons use unrounded values; displayed values are rounded to two decimals. Percentiles use linear interpolation at `(sampleCount - 1) * percentile`; small runs have limited percentile resolution.
+
+Exit code 0 requires all executions (including warm-up) and thresholds to pass. Any assertion, HTTP, network, schema, or threshold failure returns 1; a failure-rate budget never suppresses an existing request failure. Invalid settings return 2; interruption retains the existing signal exit codes and writes partial reports.
+
+Benchmark JSON uses a separate `kind: "benchmark"` report with settings, per-request and aggregate statistics, warm-up counts, iteration assertions, and threshold results. JUnit contains one case per execution (including warm-up), skipped cases for unexecuted requests, and one additional case per request/threshold. Cancelled runs include an interruption error case. Reports retain the same privacy rules as ordinary run reports below.
+
+The browser/desktop Benchmark dialog exports these same reports. Run the CI fixture with `node examples/ci/run.mjs --bench`; the CLI CI workflow runs it on Linux and Windows.
+
 ## Reports
 
 JSON includes the collection name, start time, request totals, durations, HTTP statuses, individual assertions, errors, and skip reasons. JUnit has one test case per request, with failed assertions in the failure detail and network/script/schema configuration problems represented as errors. Case names include their position so identically named requests remain distinct in CI. Counts in the summary and JUnit suite are request counts.

@@ -26,6 +26,8 @@ jobs:
       - run: npm run test:cli
       - name: Run the sample collection
         run: node examples/ci/run.mjs
+      - name: Benchmark the sample collection
+        run: node examples/ci/run.mjs --bench
       - uses: actions/upload-artifact@v4
         if: always()
         with:

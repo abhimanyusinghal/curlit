@@ -14,6 +14,7 @@ const hits: string[] = [];
 const server = createServer(async (request, response) => {
   hits.push(request.url!);
   if (request.url === '/hang') { response.writeHead(200); response.write('partial'); return; }
+  if (request.url === '/stream') { response.writeHead(200); response.write('start'); setTimeout(() => response.end('end'), 75); return; }
   if (request.url === '/schema-slow') {
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify('a'.repeat(35) + '!'));
@@ -72,6 +73,64 @@ function request(overrides: Record<string, unknown> = {}) {
 }
 
 describe('packaged CLI against real HTTP endpoints', () => {
+  it('benchmarks warm-ups and measured iterations with schema assertions and per-request thresholds', async () => {
+    const file = await jsonFile('benchmark.json', { name: 'Performance', requests: [
+      request({ name: 'Fast', responseSchema: { enabled: true, schema: '{"type":"object"}' },
+        testScript: 'test("fresh chain", () => expect(curlit.chain.token).toBe(undefined)); curlit.chain.token = "secret-token";' }),
+      request({ name: 'Stream', url: `${base}/stream`, testScript: 'test("chain", () => expect(curlit.chain.token).toBe("secret-token"));' }),
+    ] });
+    const result = await cli(['bench', file, '--iterations', '2', '--warmup', '1', '--threshold', 'p95<60000', '--threshold', 'failureRate<=0', '--report-json', 'benchmark.json.out', '--report-junit', 'benchmark.xml']);
+    expect(result, result.stderr + result.stdout).toMatchObject({ code: 0 });
+    const raw = await readFile(join(directory, 'benchmark.json.out'), 'utf8');
+    const report = JSON.parse(raw);
+    expect(report.kind).toBe('benchmark');
+    expect(report.summary).toMatchObject({ total: 4, completed: 4, passed: 4, warmup: { completed: 2 } });
+    expect(report.requests[1].latency).toMatchObject({ samples: 2 });
+    expect(report.requests[1].latency.min).toBeGreaterThanOrEqual(60);
+    expect(report.samples[0].tests[0]).toEqual({ name: 'Response schema', passed: true });
+    expect(report.samples[0].durationMs).toBeGreaterThan(report.samples[0].httpTimeMs);
+    expect(hits).toEqual(['/ok', '/stream', '/ok', '/stream', '/ok', '/stream']);
+    expect(raw).not.toContain('secret-token');
+    expect(raw).not.toContain(base);
+    expect(await readFile(join(directory, 'benchmark.xml'), 'utf8')).toContain('tests="10" failures="0" errors="0" skipped="0"');
+  });
+
+  it('returns failure for performance limits and selects a single request', async () => {
+    const file = await jsonFile('benchmark.json', { requests: [request({ name: 'One' }), request({ name: 'Two' })] });
+    const result = await cli(['bench', file, '--request', 'Two', '--iterations', '1', '--threshold', 'p95<0', '--report-junit', 'failed.xml']);
+    expect(result.code).toBe(1);
+    expect(hits).toHaveLength(1);
+    expect(result.stdout).toContain('FAIL Two:');
+    expect(await readFile(join(directory, 'failed.xml'), 'utf8')).toContain('tests="2" failures="1"');
+  });
+
+  it('bails on a schema failure during warm-up and reports skipped measurements', async () => {
+    const file = await jsonFile('benchmark.json', { requests: [request({ responseSchema: { enabled: true, schema: 'false' } })] });
+    const result = await cli(['bench', file, '--warmup', '1', '--iterations', '2', '--bail', '--report-json', 'result.json']);
+    expect(result.code).toBe(1);
+    const report = JSON.parse(await readFile(join(directory, 'result.json'), 'utf8'));
+    expect(report.summary).toMatchObject({ completed: 0, skipped: 2, warmup: { failed: 1 } });
+    expect(hits).toHaveLength(1);
+  });
+
+  it('times out benchmark requests without turning network errors into zero latency samples', async () => {
+    const file = await jsonFile('benchmark.json', { requests: [request({ url: `${base}/hang` })] });
+    const result = await cli(['bench', file, '--iterations', '1', '--timeout-request', '100', '--threshold', 'p95<1000', '--report-json', 'result.json']);
+    expect(result.code).toBe(1);
+    const report = JSON.parse(await readFile(join(directory, 'result.json'), 'utf8'));
+    expect(report.summary).toMatchObject({ errored: 1, latency: { samples: 0, p95: null } });
+    expect(report.checks[0].passed).toBe(false);
+  });
+
+  it('rejects invalid benchmark options and workloads before making requests', async () => {
+    const file = await jsonFile('benchmark.json', { requests: [request(), request()] });
+    for (const args of [['--iterations', '0'], ['--iterations', '5001'], ['--warmup', '-1'], ['--threshold', 'wrong<5'], ['--threshold', 'failureRate<101'], ['--request', 'Request']]) {
+      expect((await cli(['bench', file, ...args])).code).toBe(2);
+    }
+    expect((await cli(['run', file, '--iterations', '2'])).code).toBe(2);
+    expect(hits).toHaveLength(0);
+  });
+
   it('combines schema and script assertions in JSON and JUnit reports', async () => {
     const schema = (type: string) => ({ enabled: true, schema: JSON.stringify({ type: 'object', required: ['method'], properties: { method: { type } } }) });
     const file = await jsonFile('schemas.json', { requests: [
@@ -212,6 +271,24 @@ describe('packaged CLI against real HTTP endpoints', () => {
   });
 
   // Windows child.kill() force-terminates instead of delivering POSIX SIGINT.
+  it.skipIf(process.platform === 'win32')('writes partial benchmark reports when interrupted', async () => {
+    const file = await jsonFile('benchmark.json', { requests: [request({ url: `${base}/hang` })] });
+    const child = spawn(process.execPath, [entry, 'bench', file, '--iterations', '3', '--report-json', 'partial.json', '--report-junit', 'partial.xml'], { cwd: directory, stdio: 'pipe', windowsHide: true });
+    const interrupt = () => { child.kill('SIGINT'); };
+    server.once('request', interrupt);
+    try {
+      const code = await new Promise<number | null>((resolve, reject) => { child.once('exit', resolve); child.once('error', reject); });
+      expect(code).toBe(130);
+      const report = JSON.parse(await readFile(join(directory, 'partial.json'), 'utf8'));
+      expect(report.outcome).toBe('aborted');
+      expect(report.summary).toMatchObject({ completed: 1, errored: 1, skipped: 2 });
+      expect(await readFile(join(directory, 'partial.xml'), 'utf8')).toContain('Benchmark interrupted');
+    } finally {
+      server.removeListener('request', interrupt);
+      if (child.exitCode === null) child.kill();
+    }
+  });
+
   it.skipIf(process.platform === 'win32')('writes partial reports and exits 130 when interrupted', async () => {
     const file = await jsonFile('collection.json', { requests: [request({ url: `${base}/hang` }), request()] });
     const child = spawn(process.execPath, [entry, 'run', file, '--report-json', 'partial.json'], { cwd: directory, stdio: 'pipe', windowsHide: true });

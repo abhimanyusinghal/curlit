@@ -14,6 +14,7 @@
  */
 
 export interface HttpProxyPayload {
+  requestId?: string;
   method: string;
   url: string;
   headers: Record<string, string>;
@@ -34,6 +35,7 @@ export interface HttpProxyResponse {
   body: string;
   cookies: Array<{ name: string; value: string }>;
   time: number;
+  httpTimeMs?: number;
 }
 
 export interface OAuthTokenPayload {
@@ -68,6 +70,7 @@ export interface CurlitDesktopApi {
   isDesktop: true;
   version(): Promise<{ version: string }>;
   http(payload: HttpProxyPayload): Promise<HttpProxyResponse>;
+  cancelHttp?(requestId: string): Promise<boolean>;
   oauthToken(payload: OAuthTokenPayload): Promise<StatusResponse>;
   githubStatus(): Promise<{ configured: boolean }>;
   githubDeviceCode(): Promise<StatusResponse>;
@@ -92,4 +95,21 @@ export function desktopApi(): CurlitDesktopApi {
   const api = typeof window !== 'undefined' ? window.curlit : undefined;
   if (!api) throw new Error('Desktop API unavailable — not running in Electron');
   return api;
+}
+
+export async function sendDesktopHttp(payload: HttpProxyPayload, signal?: AbortSignal): Promise<HttpProxyResponse> {
+  const api = desktopApi();
+  if (!signal) return api.http(payload);
+  signal.throwIfAborted();
+  const requestId = crypto.randomUUID();
+  let abort: () => void = () => {};
+  const cancelled = new Promise<never>((_, reject) => {
+    abort = () => {
+      void api.cancelHttp?.(requestId).catch(() => {});
+      reject(signal.reason ?? new Error('Request cancelled'));
+    };
+    signal.addEventListener('abort', abort, { once: true });
+  });
+  try { return await Promise.race([api.http({ ...payload, requestId }), cancelled]); }
+  finally { signal.removeEventListener('abort', abort); }
 }

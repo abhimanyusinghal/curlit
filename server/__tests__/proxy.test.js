@@ -1,5 +1,7 @@
+// @vitest-environment node
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import http from 'node:http';
+import { once } from 'node:events';
 import supertest from 'supertest';
 import { app } from '../proxy.js';
 
@@ -12,6 +14,8 @@ beforeAll(async () => {
     const chunks = [];
     req.on('data', (chunk) => chunks.push(chunk));
     req.on('end', () => {
+      if (req.url === '/stream') { res.writeHead(200); res.write('start'); setTimeout(() => res.end('end'), 60); return; }
+      if (req.url === '/hang') { res.writeHead(200); res.write('partial'); return; }
       if (req.url === '/status/404') res.statusCode = 404;
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({
@@ -35,12 +39,39 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  upstreamServer.closeAllConnections();
   await new Promise((resolve, reject) => {
     upstreamServer.close((error) => error ? reject(error) : resolve());
   });
 });
 
 describe('Proxy Server', () => {
+  it('includes streaming body download in HTTP timing', async () => {
+    const response = await request.post('/api/proxy').send({ method: 'GET', url: `${upstreamUrl}/stream` });
+    expect(response.body.body).toBe('startend');
+    expect(response.body.httpTimeMs).toBeGreaterThanOrEqual(45);
+  });
+
+  it('cancels the upstream request when the client disconnects', async () => {
+    const proxy = app.listen(0, '127.0.0.1');
+    await once(proxy, 'listening');
+    let timer;
+    try {
+      const started = once(upstreamServer, 'request');
+      const closed = new Promise(resolve => upstreamServer.once('request', (_req, res) => res.once('close', resolve)));
+      const client = http.request({ host: '127.0.0.1', port: proxy.address().port, path: '/api/proxy', method: 'POST', headers: { 'content-type': 'application/json' } });
+      client.on('error', () => {});
+      client.end(JSON.stringify({ method: 'GET', url: `${upstreamUrl}/hang` }));
+      await started;
+      client.destroy();
+      await Promise.race([closed, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Upstream was not cancelled')), 2000); })]);
+    } finally {
+      clearTimeout(timer);
+      proxy.closeAllConnections();
+      await new Promise(resolve => proxy.close(resolve));
+    }
+  });
+
   it('returns 400 when URL is missing', async () => {
     const res = await request.post('/api/proxy').send({ method: 'GET' });
     expect(res.status).toBe(400);

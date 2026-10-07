@@ -75,10 +75,15 @@ app.post('/api/proxy', async (req, res) => {
     return res.status(400).json({ error: 'URL is required' });
   }
 
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  let dispatcher;
+  res.once('close', cancel);
   try {
     const fetchOptions = {
       method: method || 'GET',
       headers: { ...headers },
+      signal: controller.signal,
     };
 
     // Set body for methods that support it
@@ -112,15 +117,16 @@ app.post('/api/proxy', async (req, res) => {
 
     // When SSL verification is disabled, use a custom undici Agent that skips cert checks
     if (sslVerification === false) {
-      fetchOptions.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+      dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+      fetchOptions.dispatcher = dispatcher;
     }
 
-    const startTime = Date.now();
+    const startTime = performance.now();
     const response = await fetch(url, fetchOptions);
-    const elapsed = Date.now() - startTime;
 
     // Get response body as text
     const responseText = await response.text();
+    const elapsed = performance.now() - startTime;
 
     // Parse response headers
     const responseHeaders = {};
@@ -161,8 +167,10 @@ app.post('/api/proxy', async (req, res) => {
       body: responseBody,
       cookies,
       time: elapsed,
+      httpTimeMs: elapsed,
     });
   } catch (error) {
+    if (res.destroyed) return;
     // Extract the real error from error.cause (Node fetch wraps the actual error)
     const cause = error.cause || error;
     const code = cause.code || '';
@@ -184,6 +192,9 @@ app.post('/api/proxy', async (req, res) => {
       cookies: [],
       time: 0,
     });
+  } finally {
+    res.removeListener('close', cancel);
+    await dispatcher?.destroy();
   }
 });
 

@@ -62,15 +62,15 @@
 
 - [x] Electron desktop app (no proxy server needed)
 
-### Next Release -- Automation & Reporting
+### Next Release -- Automation, Reporting & Performance
 
 - [x] CLI tool (`curlit run collection.json`) for CI/CD pipelines -- environment overrides, timeouts, failure exit codes, and a GitHub Actions example
 - [x] Automated test reports -- JSON and JUnit XML export from the CLI and collection runner
 - [x] Response schema validation -- per-request JSON Schema draft-07 checks in browser, desktop, and CLI, with field paths in test results and reports
+- [x] Performance benchmarking -- sequential request/collection iterations, warm-up, avg/median/p95/p99, failure rates, CI thresholds, and JSON/JUnit reports
 
 ### Planned -- Performance & Testing
 
-- [ ] Performance benchmarking -- run a request N times, report avg/p95/p99
 - [ ] Response diffing -- compare two responses side-by-side
 - [ ] Mock server -- define mock responses for endpoints
 

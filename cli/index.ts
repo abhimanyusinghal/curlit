@@ -9,10 +9,13 @@ import { removeFilesForRequest } from '../src/utils/fileStore';
 import { createRunReporter, serializeRunReport } from '../src/utils/runReport';
 import { attachFiles, parseCollection, parseEnvironment, readJson } from './input';
 import { createNodeRuntime } from './runtime';
+import { parseBenchmarkThreshold, runBenchmark, validateBenchmarkConfig, type BenchmarkConfig } from '../src/utils/benchmark';
+import { serializeBenchmarkReport } from '../src/utils/benchmarkReport';
 
 const HELP = `CurlIt ${version} — run API collections in CI/CD
 
 Usage: curlit run COLLECTION.json [options]
+       curlit bench COLLECTION.json [options]
 
   --collection NAME_OR_ID    Select a collection from a multi-collection export
   --env FILE                JSON variable map or CurlIt environment object
@@ -24,6 +27,10 @@ Usage: curlit run COLLECTION.json [options]
   --timeout-script MS       Per-script execution timeout (default: 1000)
   --report-json FILE        Write a JSON run report
   --report-junit FILE       Write a JUnit XML run report
+  --request NAME_OR_ID      Benchmark one request from the selected collection
+  --iterations N            Measured benchmark iterations (default: 10)
+  --warmup N                Warm-up iterations, excluded from metrics (default: 0)
+  --threshold EXPRESSION    Per-request benchmark limit, repeatable (e.g. "p95<500")
   -h, --help                Show help
   -v, --version             Show version
 
@@ -68,13 +75,23 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       bail: { type: 'boolean' }, 'stop-on-failure': { type: 'boolean' }, delay: { type: 'string' },
       'timeout-request': { type: 'string' }, 'timeout-script': { type: 'string' },
       'report-json': { type: 'string' }, 'report-junit': { type: 'string' },
+      request: { type: 'string' }, iterations: { type: 'string' }, warmup: { type: 'string' }, threshold: { type: 'string', multiple: true },
     },
   });
   if (values.help || argv.length === 0) { process.stdout.write(HELP); return 0; }
   if (values.version) { process.stdout.write(`${version}\n`); return 0; }
-  if (positionals.length !== 2 || positionals[0] !== 'run') throw new Error('Usage: curlit run COLLECTION.json [options]. See --help.');
+  if (positionals.length !== 2 || !['run', 'bench'].includes(positionals[0])) throw new Error('Usage: curlit run|bench COLLECTION.json [options]. See --help.');
+  const benchmark = positionals[0] === 'bench';
+  if (!benchmark && ['iterations', 'warmup', 'threshold', 'request'].some(name => tokens.some(token => token.kind === 'option' && token.name === name))) {
+    throw new Error('Benchmark options require the bench command');
+  }
   const collectionFile = resolve(positionals[1]);
   const collection = parseCollection(await readJson(collectionFile), values.collection);
+  if (values.request !== undefined) {
+    const matches = collection.requests.filter(request => request.id === values.request || request.name === values.request);
+    if (matches.length !== 1) throw new Error('--request must identify exactly one request by name or id');
+    collection.requests = matches;
+  }
   const variables: Record<string, string> = values.env ? parseEnvironment(await readJson(values.env)) : Object.create(null);
   // Apply overrides in command-line order, including mixed literal/env overrides.
   for (const token of tokens) {
@@ -88,6 +105,12 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   const delayMs = milliseconds(values.delay, 0, '--delay', 0, 60_000);
   const timeoutMs = milliseconds(values['timeout-request'], 30_000, '--timeout-request', 1, 2_147_483_647);
   const scriptTimeoutMs = milliseconds(values['timeout-script'], 1_000, '--timeout-script', 1, 60_000);
+  const benchmarkConfig: BenchmarkConfig = {
+    iterations: milliseconds(values.iterations, 10, '--iterations', 1, 10_000),
+    warmup: milliseconds(values.warmup, 0, '--warmup', 0, 1_000), delayMs, timeoutMs,
+    stopOnFailure: !!(values.bail || values['stop-on-failure']), thresholds: (values.threshold ?? []).map(parseBenchmarkThreshold),
+  };
+  if (benchmark) validateBenchmarkConfig(benchmarkConfig, collection.requests);
   const reports = [
     ...(values['report-json'] ? [{ format: 'json' as const, file: values['report-json'] }] : []),
     ...(values['report-junit'] ? [{ format: 'junit' as const, file: values['report-junit'] }] : []),
@@ -112,18 +135,38 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   const runtime = createNodeRuntime(timeoutMs, scriptTimeoutMs, controller.signal);
   const reporter = createRunReporter(collection);
   const chain: Record<string, string> = Object.create(null);
-  process.stdout.write(`Running ${terminal(collection.name)} (${collection.requests.length} requests)\n`);
+  process.stdout.write(`${benchmark ? 'Benchmarking' : 'Running'} ${terminal(collection.name)} (${collection.requests.length} requests)\n`);
   try {
+    const execute: Parameters<typeof runCollection>[0]['execute'] = async (request, context) => {
+      try {
+        await attachFiles(request, collectionFile, variables, context.chainVars);
+        return await executeRequestWithScripts(request, context, runtime);
+      } finally { removeFilesForRequest(request.id); }
+    };
+    if (benchmark) {
+      const report = await runBenchmark({ name: collection.name, requests: collection.requests, variables,
+        config: benchmarkConfig, signal: controller.signal, execute });
+      const ms = (value: number | null) => value === null ? 'n/a' : `${value.toFixed(2)}ms`;
+      for (const request of report.requests) {
+        const stats = request.latency;
+        process.stdout.write(`  ${terminal(request.name)}: ${stats.samples} HTTP samples, avg ${ms(stats.avg)}, median ${ms(stats.median)}, p95 ${ms(stats.p95)}, p99 ${ms(stats.p99)}, min ${ms(stats.min)}, max ${ms(stats.max)}, failure rate ${request.failureRate?.toFixed(2) ?? 'n/a'}%\n`);
+      }
+      for (const check of report.checks) process.stdout.write(`  ${check.passed ? 'PASS' : 'FAIL'} ${terminal(report.requests[check.requestIndex].name)}: ${terminal(check.message)}\n`);
+      for (const sample of report.samples.filter(sample => sample.outcome !== 'passed')) {
+        process.stdout.write(`  ${sample.phase} ${sample.iteration} ${terminal(report.requests[sample.requestIndex].name)}: ${terminal(sample.error || sample.tests.filter(test => !test.passed).map(test => `${test.name}: ${test.error}`).join('; ') || `HTTP ${sample.statusCode}`)}\n`);
+      }
+      process.stdout.write(`${report.outcome.toUpperCase()}: ${report.summary.completed}/${report.summary.total} measured requests, ${report.summary.warmup.completed} warm-up requests, ${report.summary.skipped} skipped\n`);
+      for (const output of reports) {
+        await mkdir(dirname(resolve(output.file)), { recursive: true });
+        await writeFile(output.file, serializeBenchmarkReport(report, output.format), 'utf8');
+      }
+      return interrupted || (report.outcome === 'passed' ? 0 : 1);
+    }
     await runCollection({
       requests: collection.requests, variables, signal: controller.signal,
       getChainVars: () => ({ ...chain }), onChainVars: updates => Object.assign(chain, updates),
       stopOnFailure: !!(values.bail || values['stop-on-failure']), delayMs,
-      execute: async (request, context) => {
-        try {
-          await attachFiles(request, collectionFile, variables, context.chainVars);
-          return await executeRequestWithScripts(request, context, runtime);
-        } finally { removeFilesForRequest(request.id); }
-      },
+      execute,
       onEvent(event) {
         reporter.record(event);
         if (event.type === 'request-complete') {
