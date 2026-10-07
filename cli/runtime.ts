@@ -68,6 +68,7 @@ export function createNodeRuntime(timeoutMs: number, scriptTimeoutMs: number, ru
         const options: RequestInit & { dispatcher: Agent } = { method: request.method, headers, body, dispatcher, signal: combined };
         const response = await fetch(target, options);
         let text = await response.text();
+        const httpTimeMs = performance.now() - started;
         try { text = JSON.stringify(JSON.parse(text), null, 2); } catch { /* Preserve non-JSON responses. */ }
         const cookies = response.headers.getSetCookie().map(cookie => {
           const pair = cookie.split(';')[0];
@@ -77,7 +78,7 @@ export function createNodeRuntime(timeoutMs: number, scriptTimeoutMs: number, ru
         return {
           status: response.status, statusText: response.statusText,
           headers: Object.fromEntries(response.headers), body: text, cookies,
-          size: Buffer.byteLength(text), time: Math.round(performance.now() - started),
+          size: Buffer.byteLength(text), time: Math.round(httpTimeMs), httpTimeMs,
         };
       } catch (error) {
         if (timeout.aborted) throw new Error(`Request timed out after ${timeoutMs}ms`);

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('curlit', {
   version: () => ipcRenderer.invoke('curlit:version'),
 
   http: (payload) => ipcRenderer.invoke('curlit:http', payload),
+  cancelHttp: (requestId) => ipcRenderer.invoke('curlit:http-cancel', requestId),
 
   oauthToken: (payload) => ipcRenderer.invoke('curlit:oauth-token', payload),
 

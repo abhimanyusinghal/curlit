@@ -9,6 +9,7 @@ export interface ExecuteContext {
   /** Chain variables snapshot (updated by prior test scripts). */
   chainVars: Record<string, string>;
   signal?: AbortSignal;
+  requestTimeoutMs?: number;
 }
 
 /** Runtime adapters keep collection semantics shared across the UI and CLI. */
@@ -168,11 +169,13 @@ async function execute(
 
   // --- Send ---
   let response: ResponseData;
+  const timeout = ctx.requestTimeoutMs === undefined ? undefined : AbortSignal.timeout(ctx.requestTimeoutMs);
+  const sendSignal = timeout ? AbortSignal.any([timeout, ...(ctx.signal ? [ctx.signal] : [])]) : ctx.signal;
   try {
     ctx.signal?.throwIfAborted();
-    response = await runtime.sendRequest(resolved, ctx.signal);
+    response = await runtime.sendRequest(resolved, sendSignal);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to send request';
+    const message = timeout?.aborted ? `Request timed out after ${ctx.requestTimeoutMs}ms` : err instanceof Error ? err.message : 'Failed to send request';
     const isProxyDown = message === 'Failed to fetch' || message.includes('NetworkError');
     return {
       resolvedRequest: resolved,

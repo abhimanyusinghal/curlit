@@ -32,6 +32,8 @@ import { BackupModal } from './components/BackupModal';
 import { ShareRequestModal } from './components/ShareRequestModal';
 import { SyncModal } from './components/SyncModal';
 import { CollectionRunnerModal } from './components/CollectionRunnerModal';
+import { BenchmarkModal } from './components/BenchmarkModal';
+import type { Collection } from './types';
 import { useResizable } from './hooks/useResizable';
 import { disconnectWebSocket } from './utils/websocket';
 import { readShareFromLocation, sharedRequestToTabSeed } from './utils/share';
@@ -60,6 +62,7 @@ function App() {
   const [proxyMode, setProxyModeState] = useState<ProxyMode>(() => getProxyMode());
   const [agentConnected, setAgentConnected] = useState(false);
   const [runnerCollectionId, setRunnerCollectionId] = useState<string | null>(null);
+  const [benchmarkTarget, setBenchmarkTarget] = useState<Pick<Collection, 'name' | 'requests'> | null>(null);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
   const activeRequest = activeTab ? requests[activeTab.requestId] : null;
@@ -302,7 +305,10 @@ function App() {
         {sidebarOpen && (
           <>
             <div style={{ width: sidebarWidth }} className="flex-shrink-0 h-full overflow-hidden">
-              <Sidebar onRunCollection={id => setRunnerCollectionId(id)} />
+              <Sidebar onRunCollection={id => setRunnerCollectionId(id)} onBenchmarkCollection={id => {
+                const collection = useAppStore.getState().collections.find(item => item.id === id);
+                if (collection) setBenchmarkTarget(structuredClone({ name: collection.name, requests: collection.requests }));
+              }} />
             </div>
             <div
               onMouseDown={handleSidebarResize}
@@ -321,7 +327,7 @@ function App() {
           {activeRequest ? (
             <>
               {/* URL bar */}
-              <UrlBar request={activeRequest} />
+              <UrlBar request={activeRequest} onBenchmark={() => setBenchmarkTarget(structuredClone({ name: activeRequest.name || 'Request', requests: [activeRequest] }))} />
 
               {/* Request panel */}
               <div style={{ height: requestHeight }} className="flex-shrink-0 overflow-hidden border-b border-dark-600">
@@ -382,6 +388,7 @@ function App() {
         onClose={() => setRunnerCollectionId(null)}
         collection={useAppStore.getState().collections.find(c => c.id === runnerCollectionId) ?? null}
       />
+      {benchmarkTarget && <BenchmarkModal target={benchmarkTarget} onClose={() => setBenchmarkTarget(null)} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { RequestConfig, ResponseData, KeyValuePair, AuthConfig, FormDataEntry } from '../types';
 import { getFile, fileToBase64 } from './fileStore';
 import { proxyUrl } from './proxyConfig';
-import { isDesktop, desktopApi, type HttpProxyPayload } from './desktop';
+import { isDesktop, sendDesktopHttp, type HttpProxyPayload } from './desktop';
 
 export function buildUrl(baseUrl: string, params: KeyValuePair[]): string {
   const enabledParams = params.filter(p => p.enabled && p.key);
@@ -264,6 +264,7 @@ export function prepareRequest(request: RequestConfig) {
 }
 
 export async function sendRequest(request: RequestConfig, signal?: AbortSignal): Promise<ResponseData> {
+  signal?.throwIfAborted();
   const { url: finalUrl, headers, body } = prepareRequest(request);
   const startTime = performance.now();
 
@@ -310,9 +311,9 @@ export async function sendRequest(request: RequestConfig, signal?: AbortSignal):
     };
   }
 
-  let data: { status: number; statusText: string; headers?: Record<string, string>; body: string; cookies?: { name: string; value: string }[] };
+  let data: { status: number; statusText: string; headers?: Record<string, string>; body: string; cookies?: { name: string; value: string }[]; httpTimeMs?: number };
   if (isDesktop()) {
-    data = await desktopApi().http(payload);
+    data = await sendDesktopHttp(payload, signal);
   } else {
     const response = await fetch(proxyUrl('/api/proxy'), {
       method: 'POST',
@@ -332,6 +333,7 @@ export async function sendRequest(request: RequestConfig, signal?: AbortSignal):
     body: typeof data.body === 'string' ? data.body : JSON.stringify(data.body, null, 2),
     size: new Blob([typeof data.body === 'string' ? data.body : JSON.stringify(data.body)]).size,
     time: Math.round(elapsed),
+    ...(typeof data.httpTimeMs === 'number' && Number.isFinite(data.httpTimeMs) && data.httpTimeMs >= 0 ? { httpTimeMs: data.httpTimeMs } : {}),
     cookies: data.cookies || [],
   };
 }

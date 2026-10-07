@@ -48,6 +48,7 @@ describe('Electron preload bridge', () => {
     expect(contextBridge.exposeInMainWorld).toHaveBeenCalledOnce();
     expect(bridge).toEqual(expect.objectContaining({ isDesktop: true }));
     expect(Object.keys(bridge).sort()).toEqual([
+      'cancelHttp',
       'githubDeviceCode',
       'githubDeviceToken',
       'githubStatus',
@@ -68,6 +69,7 @@ describe('Electron preload bridge', () => {
 
     bridge.version();
     bridge.http(payload);
+    bridge.cancelHttp('request-1');
     bridge.oauthToken({ tokenUrl: 'https://auth.example.test/token' });
     bridge.githubStatus();
     bridge.githubDeviceCode();
@@ -79,6 +81,7 @@ describe('Electron preload bridge', () => {
     expect(ipcRenderer.invoke.mock.calls).toEqual([
       ['curlit:version'],
       ['curlit:http', payload],
+      ['curlit:http-cancel', 'request-1'],
       ['curlit:oauth-token', { tokenUrl: 'https://auth.example.test/token' }],
       ['curlit:github-status'],
       ['curlit:github-device-code'],

@@ -1,4 +1,4 @@
-import { Send, Loader2, ShieldCheck, ShieldOff, Plug, Unplug } from 'lucide-react';
+import { Send, Loader2, ShieldCheck, ShieldOff, Plug, Unplug, Gauge } from 'lucide-react';
 import type { HttpMethod, RequestConfig } from '../types';
 import { useAppStore } from '../store';
 import { getMethodColor } from '../utils/http';
@@ -9,9 +9,10 @@ const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 
 
 interface Props {
   request: RequestConfig;
+  onBenchmark?: () => void;
 }
 
-export function UrlBar({ request }: Props) {
+export function UrlBar({ request, onBenchmark }: Props) {
   const updateRequest = useAppStore(s => s.updateRequest);
   const setResponse = useAppStore(s => s.setResponse);
   const setLoading = useAppStore(s => s.setLoading);
@@ -157,6 +158,7 @@ export function UrlBar({ request }: Props) {
       </button>
 
       {/* Send / Connect / Disconnect Button */}
+      {!isWs && onBenchmark && <button onClick={onBenchmark} disabled={loading || !request.url.trim()} aria-label="Benchmark request" title="Benchmark request" className="p-2.5 rounded-lg border border-dark-500 bg-dark-700 text-dark-300 hover:text-dark-100 disabled:opacity-50 cursor-pointer"><Gauge size={18} /></button>}
       {isWs ? (
         wsStatus === 'connected' ? (
           <button

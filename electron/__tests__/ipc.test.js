@@ -53,6 +53,8 @@ async function startHttpServer() {
     request.setEncoding('utf8');
     request.on('data', chunk => { receivedBody += chunk; });
     request.on('end', () => {
+      if (request.url === '/hang') { response.writeHead(200); response.write('partial'); return; }
+      if (request.url === '/stream') { response.writeHead(200); response.write('start'); setTimeout(() => response.end('end'), 60); return; }
       response.writeHead(201, { 'content-type': 'application/json', 'set-cookie': 'session=abc; Path=/' });
       response.end(JSON.stringify({ receivedBody, method: request.method }));
     });
@@ -106,7 +108,7 @@ async function waitFor(predicate, message) {
 async function closeServer(server) {
   if (server instanceof WebSocketServer) {
     for (const client of server.clients) client.terminate();
-  }
+  } else server.closeAllConnections();
   await new Promise(resolve => server.close(() => resolve()));
 }
 
@@ -122,7 +124,8 @@ describe('Electron IPC transport', () => {
     const sender = createSender();
     const trustedEvent = { sender, senderFrame: { url: sender.getURL(), parent: null } };
     const untrustedEvent = { sender: createSender(2), senderFrame: { url: 'https://evil.example.test', parent: null } };
-    const policy = { isTrustedSender: event => event === trustedEvent };
+    const otherTrustedEvent = { sender: createSender(3) };
+    const policy = { isTrustedSender: event => event === trustedEvent || event === otherTrustedEvent };
 
     expect(registerIpcHandlers(ipc, policy)).toBe(true);
     expect(registerIpcHandlers(ipc, policy)).toBe(false);
@@ -131,6 +134,7 @@ describe('Electron IPC transport', () => {
       'curlit:github-device-token',
       'curlit:github-status',
       'curlit:http',
+      'curlit:http-cancel',
       'curlit:oauth-token',
       'curlit:version',
     ]);
@@ -163,6 +167,17 @@ describe('Electron IPC transport', () => {
       cookies: [{ name: 'session', value: 'abc' }],
     });
     expect(JSON.parse(httpResponse.body)).toEqual({ receivedBody: 'desktop transport', method: 'POST' });
+
+    const streamed = await invoke(ipc, 'curlit:http', trustedEvent, { method: 'GET', url: http.url.replace('/echo', '/stream') });
+    expect(streamed.httpTimeMs).toBeGreaterThanOrEqual(45);
+    const started = once(http.server, 'request');
+    const pending = invoke(ipc, 'curlit:http', trustedEvent, { requestId: 'benchmark-request', method: 'GET', url: http.url.replace('/echo', '/hang') });
+    await started;
+    await expect(invoke(ipc, 'curlit:http-cancel', untrustedEvent, 'benchmark-request')).rejects.toThrow('untrusted renderer');
+    await expect(invoke(ipc, 'curlit:http-cancel', otherTrustedEvent, 'benchmark-request')).resolves.toBe(false);
+    await expect(invoke(ipc, 'curlit:http-cancel', trustedEvent, 'benchmark-request')).resolves.toBe(true);
+    expect((await withTimeout(pending, 'cancelled request did not finish')).status).toBe(0);
+    await expect(invoke(ipc, 'curlit:http-cancel', trustedEvent, 'benchmark-request')).resolves.toBe(false);
 
     const first = await startWebSocketServer();
     const second = await startWebSocketServer();

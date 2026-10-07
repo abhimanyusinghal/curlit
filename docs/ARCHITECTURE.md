@@ -137,6 +137,16 @@ Requests optionally store `responseSchema: { enabled, schema }`, retaining schem
 
 `src/utils/responseSchema.ts` uses Ajv and ajv-formats for draft-07 validation without coercion, defaults, property removal, or network schema loading. It returns JSON Pointer paths and caps displayed errors. The browser and Electron renderer use a Vite module worker, loaded only when validation is enabled. The CLI uses `cli/schema-worker.ts` in a Node worker with a 64 MB heap limit. Each adapter waits for worker readiness (up to ten seconds), then enforces a two-second processing budget and terminates the worker on completion, error, timeout, or cancellation. The validator has no dependency on the UI or transport.
 
+### Benchmarks and HTTP Timing
+
+`src/utils/benchmark.ts` runs bounded sequential warm-up and measured iterations through the shared request executor. It snapshots inputs, starts fresh chain variables each iteration, records assertions without response payloads, and calculates interpolated latency percentiles and failure rates. Thresholds are evaluated independently for each request. `benchmarkReport.ts` exports JSON or converts execution/threshold results to the existing JUnit serializer. Ordinary collection run reports remain unchanged.
+
+`BenchmarkModal` is opened for a request from the URL bar or for a collection from the sidebar. `curlit bench` injects the same Node execution adapter used by `curlit run`. Both pass a per-request network timeout through `ExecuteContext.requestTimeoutMs`, separate from script/schema budgets. Interrupted runs preserve completed measurements and skipped counts.
+
+`ResponseData.httpTimeMs` carries target HTTP timing from the trusted transport. The proxy, Electron main process, and CLI measure with a monotonic clock from immediately before fetch through body download, before formatting or assertions. The renderer's existing `time` field still records its transport round trip. Missing timing is an explicit benchmark error rather than a fabricated zero sample. Reports contain both HTTP time and overall execution duration.
+
+Browser cancellation closes the proxy connection, which aborts the upstream fetch. Desktop requests optionally carry a request ID; the renderer calls the narrow `curlit:http-cancel` IPC method on abort. The main process validates the ID and trusted sender, then looks up the controller only within that renderer's active requests. Request completion removes the controller. CLI fetch uses the existing combined abort/timeout signal.
+
 ### Persistence Layer
 
 All data is persisted in the browser's localStorage:
